@@ -1,6 +1,8 @@
 type data = {depth:int; cardinality:int}
 type bdd = T | F | N of bdd * bdd (* first part is for 0, second part is for 1*)
 
+exception Not_same_depth
+                      
 let is_leaf m = match m with
   | T | F -> true
   | _ -> false
@@ -302,47 +304,146 @@ let width m =
   aux m;
   Array.fold_left (fun acc elt ->
       max acc elt
-    ) 0 widths
+    ) 0 widths, widths
   
   
 let starting = bdd_from_intlist [1;5;6;7;9;10;11;12] 4
 
 let wrt = bdd_from_intlist [0;1;6;7;8;9;10;11;12;13] 4
 
-let improved_consistency m m' =
+let bool_couple_to_int (a,b) = (if a then 1 else 0) + 2*(if b then 1 else 0)
+        
+let choice a width =
+  (* could be improved by using the number of each parent for each possibility *)
+  Array.map (fun h ->
+      let new_h = Hashtbl.create 101 in
+      let counter = ref 0 in
+      Hashtbl.iter (fun k v ->
+          match !(v.(3)) > 0, !(v.(1)) > 0, !(v.(2)) > 0 with
+          | true, _, _ | _, true, true -> incr counter; Hashtbl.add new_h k (Array.init 4 (fun i -> if i = 3 then true else false))
+          | _, true, false -> incr counter; Hashtbl.add new_h k (Array.init 4 (fun i -> if i = 1 then true else false))
+          | _, false, true -> incr counter; Hashtbl.add new_h k (Array.init 4 (fun i -> if i = 2 then true else false))
+          | _ -> incr counter; Hashtbl.add new_h k (Array.init 4 (fun i -> if i = 0 then true else false))
+        ) h;
+      Hashtbl.iter (fun k v ->
+          match !counter < width, !(v.(1)) > 0 && !(v.(2)) > 0 with
+          | true, true -> let a = Hashtbl.find new_h k in
+                          a.(3) <- false; a.(1) <- true; a.(2) <- true
+          | _ -> ()) h;
+      Hashtbl.iter (fun k v ->
+          match !counter < width, !(v.(1)) > 0 with
+          | true, true -> (Hashtbl.find new_h k).(1) <- true
+          | _ -> ()) h;
+      Hashtbl.iter (fun k v ->
+          match !counter < width, !(v.(2)) > 0 with
+          | true, true -> (Hashtbl.find new_h k).(2) <- true
+          | _ -> ()) h;
+      new_h
+    ) a
+  
+let improved_consistency m m' choice width =
   (* returns the bdd that is the one after applying improved consistency on m wrt m' *)
   let layers = Array.init (depth m + 1) (fun i -> Hashtbl.create 101) in (* this hashtbl contains tuples representing the parents that link to the node with (only 0-edge, only 1-edge, two edges, no edge)*)
   let inter = Hashtbl.create 101 in
   let rec changes m m' parent =
     try Hashtbl.find inter (ref_repr m m')
     with Not_found ->
-          Hashtbl.add inter (ref_repr m m') ();
           let current = layers.(depth m)in
           let (has_zero, has_one) =
             let current_hash = try Hashtbl.find current (ref m)
                                with Not_found -> let h = Hashtbl.create 101 in Hashtbl.add current (ref m) h; h in
             try Hashtbl.find current_hash parent
-            with Not_found -> Hashtbl.add current_hash parent (0,0); (0,0) in
-          
-            match m with
-            | T | F -> ()
-            | N(a,b) ->
-               match m' with
-               | F -> Hashtbl.add current (ref m) (try let (t1,t2,t3,t4) = Hashtbl.find current (ref m) in (t1,t2,t3,parent::t4)
-                                                   with Not_found -> ([], [], [], [parent]));
-                      ()
-               | T -> Hashtbl.add current (ref m) (try let (t1,t2,t3,t4) = Hashtbl.find current (ref m) in (t1,t2,t3,parent::t4)
-                                                   with Not_found -> ([], [], [parent], []));
-                      ()
-               | N(c,d) -> ()
-                  
+            with Not_found -> Hashtbl.add current_hash parent (false,false); (false,false) in
+          let res =
+            match m with (* This big matching can be factorized by matching on m and m' TODO later *)
+            | T | F -> m
+                     
+            | N(F,a) -> begin
+                match m' with
+                | F -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                | T -> Hashtbl.add (Hashtbl.find current (ref m)) parent (has_zero, true); T
+                | N(_,F) -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                | N(_,c) -> begin
+                    match changes a c (ref m) with
+                    | F -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                    | _ -> Hashtbl.add (Hashtbl.find current (ref m)) parent (has_zero, true); T
+                  end
+              end
+                      
+            | N(a,F) -> begin
+                match m' with
+                | F -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                | T -> Hashtbl.add (Hashtbl.find current (ref m)) parent (true, has_one); T
+                | N(F,_) -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                | N(c,_) -> begin
+                    match changes a c (ref m) with
+                    | F -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                    | _ -> Hashtbl.add (Hashtbl.find current (ref m)) parent (true, has_one); T
+                  end
+              end
+                      
+            | N(a,b) -> begin
+                match m' with
+                | T -> Hashtbl.add (Hashtbl.find current (ref m)) parent (true, true); T
+                | F | N(F,F)-> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false);F 
+                | N(F,c) -> begin
+                    match changes b c (ref m) with
+                    | F -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                    | _ -> Hashtbl.add (Hashtbl.find current (ref m)) parent (has_zero, true); T
+                  end
+                | N(c,F) -> begin
+                    match changes a c (ref m) with
+                    | F -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                    | _ -> Hashtbl.add (Hashtbl.find current (ref m)) parent (true, has_one); T
+                  end
+                | N(c,d) -> begin
+                    match changes a c (ref m), changes b d (ref m) with
+                    | F,F -> Hashtbl.add (Hashtbl.find current (ref m)) parent (false, false); F
+                    | F,_ -> Hashtbl.add (Hashtbl.find current (ref m)) parent (has_zero, true); T
+                    | _,F -> Hashtbl.add (Hashtbl.find current (ref m)) parent (true, has_one); T
+                    | _ -> Hashtbl.add (Hashtbl.find current (ref m)) parent (true, true); T
+                  end
+              end
+          in 
+          Hashtbl.add inter (ref_repr m m') res;
+          res
   in
   let _ = changes m m' (ref m) in
-  
+  let inverted_layers = Array.map (fun h ->
+                            let h' = Hashtbl.create 101 in
+                            Hashtbl.iter (fun k v ->
+                                Hashtbl.iter (fun k' v' ->
+                                    let index = bool_couple_to_int v' in
+                                    try incr (Hashtbl.find h' k).(index)
+                                    with Not_found -> let a = Array.init 4 (fun x -> ref 0) in
+                                                      incr a.(index);
+                                                      Hashtbl.add h' k a
+                                  ) v;
+                              ) h; h'
+                          ) layers in
+  (* TODO: for each node in each layer, count the number of occurences of each pair of possibilities, this array will go in the function that will choose the nodes to split *)
+  let new_layers = choice inverted_layers width in
   let visited = Hashtbl.create 101 in
-  ()
-
-
+  let rec apply m parent = print_string "enter\n";
+    try Hashtbl.find visited (ref m, parent)
+    with Not_found ->
+          let res = match m with
+            | T | F -> m
+            | N(a,b) -> let pos = bool_couple_to_int (try Hashtbl.find (Hashtbl.find layers.(depth m) (ref m)) parent with _ -> print_string (bdd_to_string m); raise Not_found) in
+                        let c = Hashtbl.find new_layers.(depth m) (ref m) in
+                        match c.(pos), pos with
+                        | _, 0 -> F
+                        | false, _ | true, 3 -> bdd_of (apply a (ref m)) (apply b (ref m))
+                        | true, 1 -> bdd_of (apply a (ref m)) F
+                        | true, 2 -> bdd_of F (apply b (ref m))
+                        | _ -> F (* Impossible to get here *)
+          in
+          Hashtbl.add visited (ref m, parent) res;
+          res
+  in
+  apply m (ref m)
+                                                  
+(* Bug because I have not always filled the hashtable *)  
 
 
 
@@ -351,6 +452,6 @@ let improved_consistency m m' =
 
 
   
-let _ = print_string (draw_dot (mdd_consistency starting wrt))
+let _ = print_string (draw_dot (starting))
 
           
