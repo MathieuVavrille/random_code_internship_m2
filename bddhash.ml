@@ -123,7 +123,7 @@ let multiple_mdd_consistency m bdds = (* I am almost sure that there is a bug *)
              res
   in aux2 m
 
-let mdd_consistency m m' = multiple_mdd_consistency m (Bddset.add m' Bddset.empty)
+let mdd_consistency m m' = multiple_mdd_consistency m (Bddset.singleton m')
 
 
 (* Some functions to create bdds *)
@@ -458,7 +458,7 @@ let limit m width heuristic = (* suppose that width >= 1 *)
                                                Bddset.add a (Bddset.add b acc)
                   )(reduce layer) Bddset.empty)
   in
-  aux (Bddset.add m Bddset.empty);
+  aux (Bddset.singleton m);
   let visited = Hashtbl.create 101 in
   let rec replace_bdd m =
     try Hashtbl.find visited (ref m)
@@ -599,12 +599,12 @@ let rec a_lot_of_tests size =
   match size < 12 with
   | false -> ()
   | true -> print_string ("BDD OF SIZE "^(string_of_int size));print_newline();
-            let randomset = random_set size in
+            let randomset = bdd_of_bitlistset (random_set size) in
             let rec aux width_max =
               match width_max with
               | 1 -> ()
-              | _ -> let random_bdd = limited_bdd_of_bitlistset randomset width_max first_come_heuristic in
-                     let improved_bdd = limited_bdd_of_bitlistset randomset width_max merge_value_heuristic in
+              | _ -> let random_bdd = limit randomset width_max bdd_first_come_heuristic in
+                     let improved_bdd = limit randomset width_max bdd_merge_value_heuristic in
                      print_string ("Width "^(string_of_int width_max)^"  --  Random "^(string_of_int (cardinal random_bdd))^"  --  Improved "^(string_of_int (cardinal improved_bdd))); print_newline();
                      if fst (width random_bdd) > width_max then print_string "fail random\n";
                      if fst (width improved_bdd) > width_max then print_string "fail improved\n";
@@ -614,7 +614,7 @@ let rec a_lot_of_tests size =
             print_newline();
             a_lot_of_tests (size + 1)
 
-                           (*let _ = a_lot_of_tests 3*)
+(*let _ = a_lot_of_tests 3*)
 
 (*let new_improved_consistency m m' width choice =
   let replacement = Hashtbl.create 101 in
@@ -629,8 +629,7 @@ let rec a_lot_of_tests size =
               Bddset.add uni (Bddset.remove m1 (Bddset.remove m2 bdds))
   in
   let rec generate_layers bdds = ()
-  in ()
- *)
+  in ()*)
 
 
 let extract_depth_k m wanted_depth =
@@ -641,7 +640,7 @@ let extract_depth_k m wanted_depth =
     with Not_found -> 
       let res = 
         match depth m = wanted_depth, m with
-        | true, _ -> Bddset.add m Bddset.empty
+        | true, _ -> Bddset.singleton m
         | false, T | false, F -> failwith "extract_depth_k: The wanted depth has not been found in the bdd"
         | false, N(a,b) -> Bddset.map (fun x -> bdd_of x x) (Bddset.union (aux a) (aux b))
       in 
@@ -658,6 +657,159 @@ let cst_mod_propagator x c k =
   (* Propagator for constraint x mod 2^k = c with c a constant *)
   mdd_consistency x (bdd_of_int c k (depth x))
 
+(* Binary operations: increase the width, should be used for propagators *)
+  
+let bdd_not =
+  let hash_and = Hashtbl.create 101 in
+  let rec aux m =
+    try Hashtbl.find hash_and (ref m)
+    with Not_found ->
+          let res =
+            match m with
+            | T -> F
+            | F -> T
+            | N(a,b) -> bdd_of (aux b) (aux a)
+          in
+          Hashtbl.add hash_and (ref m) res;
+          res
+  in aux
+  
+let bdd_and =
+  let hash_and = Hashtbl.create 101 in
+  let rec aux m m' =
+    try Hashtbl.find hash_and (ref_repr m m')
+    with Not_found ->
+          let res =
+            match m, m' with
+            | T, T -> T
+            | F,_ | _,F -> F
+            | T,_ | _,T -> failwith "bdd_and: not the same depth"
+            | N(a,b), N(c,d) -> bdd_of (union (aux a c) (union (aux a d) (aux b c))) (aux b d)
+          in
+          Hashtbl.add hash_and (ref_repr m m') res;
+          res
+  in aux
+  
+let bdd_or =
+  let hash_or = Hashtbl.create 101 in
+  let rec aux m m' =
+    try Hashtbl.find hash_or (ref_repr m m')
+    with Not_found ->
+          let res =
+            match m, m' with
+            | F,x | x,F -> x
+            | T,T -> T
+            | T,_ | _,T -> failwith "bdd_or: not the same depth"
+            | N(a,b), N(c,d) -> bdd_of (aux a c) (union (aux a d) (union (aux b c) (aux b d)))
+          in
+          Hashtbl.add hash_or (ref_repr m m') res;
+           res
+  in aux
+  
+let bdd_xor =
+  let hash_xor = Hashtbl.create 101 in
+  let rec aux m m' =
+    try Hashtbl.find hash_xor (ref_repr m m')
+    with Not_found ->
+          let res =
+            match m, m' with
+            | T, T -> F
+            | F,a | a,F -> bdd_not a
+            | T,_ | _,T -> failwith "bdd_and: not the same depth"
+            | N(a,b), N(c,d) -> bdd_of (union (aux a c) (aux b d)) (union (aux a d) (aux b c))
+          in
+          Hashtbl.add hash_xor (ref_repr m m') res;
+          res
+  in aux
+
+let rec inter_with_union bdd bdds =
+  match bdd with
+  | F -> F
+  | T -> if Bddset.is_empty bdds then F else T
+  | N(a,b) ->
+     let zero, one = Bddset.fold (fun elt (zeroacc, oneacc) ->
+                         match elt with
+                         | F -> (zeroacc, oneacc)
+                         | T -> failwith "inter_with_union : not the same size"
+                         | N(F,F) -> failwith "inter_with_union : N(F,F) should be equal to F"
+                         | N(F,a) -> (zeroacc, Bddset.add a oneacc)
+                         | N(a,F) -> (Bddset.add a zeroacc, oneacc)
+                         | N(a,b) -> (Bddset.add a zeroacc, Bddset.add b oneacc)
+                       ) bdds (Bddset.empty, Bddset.empty) in
+     bdd_of (inter_with_union a zero) (inter_with_union b one)
+
+let rec list_compare elt_compare l1 l2 =
+  match l1,l2 with
+  | [], [] -> 0
+  | [], _ -> -1
+  | _, [] -> 1
+  | x::q, y::r -> begin match elt_compare x y with
+                  | 0 -> list_compare elt_compare q r
+                  | a -> a end
+
+let bdd_compare m1 m2 = Pervasives.compare (ref m1) (ref m2)
+                
+module Orderedbddbddlist =
+  struct
+    type t = bdd * Bddset.t
+    let compare (m1,m2) (m1', m2') =
+      match Pervasives.compare (ref m1) (ref m1') with
+      | 0 -> Bddset.compare m2 m2'
+      | a -> a
+  end
+  
+module Bddbddsset = Set.Make(Orderedbddbddlist)
+                 
+let test m m' width choice =
+  let replacement = Hashtbl.create 101 in
+  let add_to_hash hash bdd set new_set =
+    (* useful function to add a set to a hashtbl in a hashtbl *)
+    let bdd_hash = try Hashtbl.find hash (ref bdd)
+                   with Not_found -> let new_hash = Hashtbl.create 101 in
+                                     Hashtbl.add hash (ref bdd) new_hash;
+                                     new_hash in
+    Hashtbl.add bdd_hash set new_set
+  in 
+  let rec reduce bddblset = match Bddbddsset.cardinal bddblset > width with
+    (* take a layer as input, and return a reduced layer (with width smaller than said), and update the replacement hashtbl *)
+    | false -> bddblset
+    | true -> let s1, s2 = choice bddblset in
+              if fst s1 != fst s2 then failwith "the choice returned two nodes that don't come from the same node";
+              let merge_union = Bddset.union (snd s1) (snd s2) in
+              add_to_hash replacement (fst s1) (snd s1) merge_union;
+              add_to_hash replacement (fst s2) (snd s2) merge_union;
+              reduce (Bddbddsset.add (fst s1, merge_union) (Bddbddsset.remove s1 (Bddbddsset.remove s2 bddblset)))
+  in
+  let rec compute_layer bddbss =
+    let new_layer = Bddbddsset.fold (fun (m, bdds) acc ->
+                        match m with
+                        | T | F -> acc
+                        | N(a,b) ->
+                           let zero, one = Bddset.fold (fun elt (zeroacc, oneacc) ->
+                                               match elt with
+                                               | T -> failwith "test_change_name: not the same size"
+                                               | F -> (zeroacc, oneacc)
+                                               | N(F,F) -> failwith "inter_with_union : N(F,F) should be equal to F"
+                                               | N(F,c) -> (zeroacc, Bddset.add c oneacc)
+                                               | N(c,F) -> (Bddset.add c zeroacc, oneacc)
+                                               | N(c,d) -> (Bddset.add c zeroacc, Bddset.add c oneacc)
+                                             ) bdds (Bddset.empty, Bddset.empty) in
+                           Bddbddsset.add (a,zero) (Bddbddsset.add (b,zero) acc)
+                      ) bddbss Bddbddsset.empty
+    in
+    compute_layer (reduce new_layer)
+  in
+  let rec replace_chain_set start =
+    try Hashtbl.find replacement
+  let rec generate_new_bdd bdd bdds =
+    
+    match new_bdd with
+    | F -> F
+    | T -> if Bddset.compare (Bddset.singleton T) bdds = 0 then T else failwith "not the same depth while generating new bdd"
+    | N(a,b) -> 
+    
+  compute_layer (Bddbddsset.singleton (m, Bddset.singleton m'))
+ 
 
 
 
@@ -667,4 +819,7 @@ let cst_mod_propagator x c k =
 
 
 
-       
+
+
+
+    
