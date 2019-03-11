@@ -1,5 +1,5 @@
 open Bdd
-open Creation
+open Useful
 open Bddhash
 
 let _ = Random.init 0
@@ -12,4 +12,4 @@ let wrt = bdd_of_bitlistset (random_set 6)
 
 let result = improved_consistency starting wrt 4 random_heuristic_improved_consistency
            
-let _ = print_endline (draw_dot result)
+let _ = dot_file result "graph.dot"

@@ -1,13 +1,6 @@
 open Bdd
-open Creation
+open Useful
 
-(* Some useful string conversions *)
-let string_of_array f a =
-  "["^(Array.fold_left (fun acc x -> acc^(f x)^";") "" a)^"]" 
-
-let print_bool b = match b with
-  | true -> print_string "true"
-  | false -> print_string "false"
 
 let multiple_mdd_consistency m bdds = (* I am almost sure that there is a bug *)
   (* ensures MDD consistency on m wrt m' and returns m *)
@@ -61,38 +54,7 @@ let mdd_consistency m m' = multiple_mdd_consistency m (Bddset.singleton m')
   
 
   
-
-let draw_dot m =
-  (* Outputs a string that can be processed with graphviz dot *)
-  let s = ref "graph g {\n" in
-  let counter = let x = ref (-1) in fun () -> incr x; !x in
-  let indices = Hashtbl.create 101 in
-  let rec aux m =
-    try Hashtbl.find indices (ref m)
-    with Not_found -> 
-          let c = counter() in
-          Hashtbl.add indices (ref m) c;
-          match m with
-          | T -> s := !s^""^(string_of_int c)^" [label=\"\",shape=plaintext,width=.1,height=0];\n";c
-          | F -> c
-          | N(F,b) -> s := !s^(string_of_int c)^" [label=\"\",shape=plaintext,width=.5,height=0];\n";
-                      let cb = aux b in
-                      s := !s^""^(string_of_int c)^" -- "^(string_of_int cb)^";\n";
-                      c
-          | N(a,F) -> s := !s^(string_of_int c)^" [label=\"\",shape=plaintext,width=.5,height=0];\n";
-                      let ca = aux a in
-                      s := !s^""^(string_of_int c)^" -- "^(string_of_int ca)^" [style=dotted];\n";
-                      c
-          | N(a,b) -> s := !s^(string_of_int c)^" [label=\"\",shape=plaintext,width=.5,height=0];\n";
-                      let cb, ca = aux b, aux a in
-                      s := !s^""^(string_of_int c)^" -- "^(string_of_int cb)^";\n";
-                      s := !s^""^(string_of_int c)^" -- "^(string_of_int ca)^" [style=dotted];\n";
-                      c
-  in
-  let _ = aux m in
-  s := !s^"}";
-  !s^"\n"
-        
+      
 let rec split_backtrack m =
   (* Split the bdd into two bdds such that the union of them is the original bdd *)
   match m with
@@ -102,9 +64,6 @@ let rec split_backtrack m =
   | N(a,b) when is_leaf b -> let c,d = split_backtrack a in
                              bdd_of c b, bdd_of d b
   | N(a,b) -> bdd_of a F, bdd_of F b
-
-let string_of_bddset b = 
-  "{"^(Bddset.fold (fun elt acc -> string_of_bdd elt^" ; "^acc) b "")^"}"
   
 let increase_value hash key value =
     Hashtbl.add hash key (value + try Hashtbl.find hash key with Not_found -> 0)
@@ -343,30 +302,6 @@ let rec inter_with_union bdd bdds =
                          | N(a,b) -> (Bddset.add a zeroacc, Bddset.add b oneacc)
                        ) bdds (Bddset.empty, Bddset.empty) in
      bdd_of (inter_with_union a zero) (inter_with_union b one)
-
-let rec list_compare elt_compare l1 l2 =
-  match l1,l2 with
-  | [], [] -> 0
-  | [], _ -> -1
-  | _, [] -> 1
-  | x::q, y::r -> begin match elt_compare x y with
-                  | 0 -> list_compare elt_compare q r
-                  | a -> a end
-
-let bdd_compare m1 m2 = Pervasives.compare (ref m1) (ref m2)
-                
-module Orderedbddbddlist =
-  struct
-    type t = bdd * Bddset.t
-    let compare (m1,m2) (m1', m2') =
-      match Pervasives.compare (ref m1) (ref m1') with
-      | 0 -> Bddset.compare m2 m2'
-      | a -> a
-  end
-  
-module Bddbddsset = Set.Make(Orderedbddbddlist)
-
-module Bddsmap = Map.Make(Bddset)
                  
 let improved_consistency m m' width choice =
   let replacement = Hashtbl.create 101 in

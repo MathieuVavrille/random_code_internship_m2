@@ -12,6 +12,9 @@ let bdd_of a b =
   try Hashtbl.find main_hash (ref a,ref b)
   with Not_found -> let t = N(a,b) in Hashtbl.add main_hash (ref a,ref b) t; t
 
+(* Now that we ensure structural equality, we can use it *)
+let bdd_compare m1 m2 = Pervasives.compare (ref m1) (ref m2)
+
 let is_leaf m = match m with
   | T | F -> true
   | _ -> false
@@ -184,12 +187,3 @@ let bdd_xor =
   in aux
 
 
-
-(* Module definitions *)
-module Orderedbdd =
-  struct
-    type t = bdd
-    let compare m m' = Pervasives.compare (ref m) (ref m')
-  end
-
-module Bddset = Set.Make(Orderedbdd)
