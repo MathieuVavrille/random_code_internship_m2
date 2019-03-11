@@ -1,6 +1,6 @@
 open Bdd
 open Useful
-open Bddhash
+open Cstrbdd
 
 let _ = Random.init 0
   

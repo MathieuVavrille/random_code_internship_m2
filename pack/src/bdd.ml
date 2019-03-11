@@ -69,10 +69,10 @@ let width m =
 
 
 (********************************)
-(* Set theoretics, uses caching *)
+(* Set theoretics, uses caching, and will surely increase the width *)
   
 let intersection =
-  (* The intersection of two bdds. Can increase the width. Don't ensure that the bdd have same depth *)
+  (* The intersection of two bdds. Don't ensure that the bdd have same depth *)
   let inter_hash = Hashtbl.create 101 in
   let rec aux m m' =
     try Hashtbl.find inter_hash (ref m,ref m')
@@ -88,7 +88,7 @@ let intersection =
   in aux
 
 let union =
-  (* The union of two bdds. Can increase the width *)
+  (* The union of two bdds. *)
   let union_hash = Hashtbl.create 101 in
   let rec aux m m' =
     try Hashtbl.find union_hash (ref m,ref m')
@@ -118,7 +118,7 @@ let diff =
       Hashtbl.add diff_hash (ref m,ref m') t;
       t
   in aux
-
+   
    
 (**********************)
 (* Bitwise operations *)   

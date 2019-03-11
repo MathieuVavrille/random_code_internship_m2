@@ -56,7 +56,7 @@ let mdd_consistency m m' = multiple_mdd_consistency m (Bddset.singleton m')
   
       
 let rec split_backtrack m =
-  (* Split the bdd into two bdds such that the union of them is the original bdd *)
+  (* Split the bdd into two disjoint bdds such that the union of them is the original bdd *)
   match m with
   | T | F -> failwith "split_backtrack: Can't split leaves"
   | N(b,a) when is_leaf b -> let c,d = split_backtrack a in
@@ -64,6 +64,23 @@ let rec split_backtrack m =
   | N(a,b) when is_leaf b -> let c,d = split_backtrack a in
                              bdd_of c b, bdd_of d b
   | N(a,b) -> bdd_of a F, bdd_of F b
+
+let split_backrack_at_depth m d =
+  let computed = Hashtbl.create 101 in
+  let rec aux m =
+    try Hashtbl.find computed (ref m)
+    with Not_found ->
+          let res = match depth m = d, m with
+            | _, T -> failwith "split_backtrack_at_depth: depth too high"
+            | _, F -> F,F
+            | false, N(a,b) -> let (aa,ab), (ba,bb) = aux a, aux b in
+                               bdd_of aa ba,bdd_of ab bb
+            | true, N(a,b) -> a,b
+          in
+          Hashtbl.add computed (ref m) res;
+          res
+  in
+  aux m
   
 let increase_value hash key value =
     Hashtbl.add hash key (value + try Hashtbl.find hash key with Not_found -> 0)
@@ -284,8 +301,7 @@ let cst_mod_propagator x c k =
   (* Propagator for constraint x mod 2^k = c with c a constant *)
   mdd_consistency x (bdd_of_int c k (depth x))
 
-(* Binary operations: increase the width, should be used for propagators *)
-  
+    
 let rec inter_with_union bdd bdds =
   (* Computes the intersection bdd \inter (\Bigunion_i bdds[i]) where bdds is a set of bdd *)
   match bdd with
@@ -302,7 +318,8 @@ let rec inter_with_union bdd bdds =
                          | N(a,b) -> (Bddset.add a zeroacc, Bddset.add b oneacc)
                        ) bdds (Bddset.empty, Bddset.empty) in
      bdd_of (inter_with_union a zero) (inter_with_union b one)
-                 
+
+     
 let improved_consistency m m' width choice =
   let replacement = Hashtbl.create 101 in
   let add_to_hash hash bdd set new_set =
