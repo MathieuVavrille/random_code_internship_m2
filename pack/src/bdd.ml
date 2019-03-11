@@ -65,7 +65,7 @@ let width m =
 
 
 
-
+(********************************)
 (* Set theoretics, uses caching *)
   
 let intersection =
@@ -116,6 +116,72 @@ let diff =
       t
   in aux
 
+   
+(**********************)
+(* Bitwise operations *)   
+
+let bdd_not =
+  let hash_and = Hashtbl.create 101 in
+  let rec aux m =
+    try Hashtbl.find hash_and (ref m)
+    with Not_found ->
+          let res =
+            match m with
+            | T -> F
+            | F -> T
+            | N(a,b) -> bdd_of (aux b) (aux a)
+          in
+          Hashtbl.add hash_and (ref m) res;
+          res
+  in aux
+  
+let bdd_and =
+  let hash_and = Hashtbl.create 101 in
+  let rec aux m m' =
+    try Hashtbl.find hash_and (ref m,ref m')
+    with Not_found ->
+          let res =
+            match m, m' with
+            | T, T -> T
+            | F,_ | _,F -> F
+            | T,_ | _,T -> failwith "bdd_and: not the same depth"
+            | N(a,b), N(c,d) -> bdd_of (union (aux a c) (union (aux a d) (aux b c))) (aux b d)
+          in
+          Hashtbl.add hash_and (ref m,ref m') res;
+          res
+  in aux
+  
+let bdd_or =
+  let hash_or = Hashtbl.create 101 in
+  let rec aux m m' =
+    try Hashtbl.find hash_or (ref m,ref m')
+    with Not_found ->
+          let res =
+            match m, m' with
+            | F,x | x,F -> x
+            | T,T -> T
+            | T,_ | _,T -> failwith "bdd_or: not the same depth"
+            | N(a,b), N(c,d) -> bdd_of (aux a c) (union (aux a d) (union (aux b c) (aux b d)))
+          in
+          Hashtbl.add hash_or (ref m,ref m') res;
+           res
+  in aux
+  
+let bdd_xor =
+  let hash_xor = Hashtbl.create 101 in
+  let rec aux m m' =
+    try Hashtbl.find hash_xor (ref m,ref m')
+    with Not_found ->
+          let res =
+            match m, m' with
+            | T, T -> F
+            | F,a | a,F -> bdd_not a
+            | T,_ | _,T -> failwith "bdd_and: not the same depth"
+            | N(a,b), N(c,d) -> bdd_of (union (aux a c) (aux b d)) (union (aux a d) (aux b c))
+          in
+          Hashtbl.add hash_xor (ref m,ref m') res;
+          res
+  in aux
 
 
 

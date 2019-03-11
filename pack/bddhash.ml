@@ -1,4 +1,5 @@
 open Bdd
+open Creation
 
 (* Some useful string conversions *)
 let string_of_array f a =
@@ -326,70 +327,8 @@ let cst_mod_propagator x c k =
 
 (* Binary operations: increase the width, should be used for propagators *)
   
-let bdd_not =
-  let hash_and = Hashtbl.create 101 in
-  let rec aux m =
-    try Hashtbl.find hash_and (ref m)
-    with Not_found ->
-          let res =
-            match m with
-            | T -> F
-            | F -> T
-            | N(a,b) -> bdd_of (aux b) (aux a)
-          in
-          Hashtbl.add hash_and (ref m) res;
-          res
-  in aux
-  
-let bdd_and =
-  let hash_and = Hashtbl.create 101 in
-  let rec aux m m' =
-    try Hashtbl.find hash_and (ref_repr m m')
-    with Not_found ->
-          let res =
-            match m, m' with
-            | T, T -> T
-            | F,_ | _,F -> F
-            | T,_ | _,T -> failwith "bdd_and: not the same depth"
-            | N(a,b), N(c,d) -> bdd_of (union (aux a c) (union (aux a d) (aux b c))) (aux b d)
-          in
-          Hashtbl.add hash_and (ref_repr m m') res;
-          res
-  in aux
-  
-let bdd_or =
-  let hash_or = Hashtbl.create 101 in
-  let rec aux m m' =
-    try Hashtbl.find hash_or (ref_repr m m')
-    with Not_found ->
-          let res =
-            match m, m' with
-            | F,x | x,F -> x
-            | T,T -> T
-            | T,_ | _,T -> failwith "bdd_or: not the same depth"
-            | N(a,b), N(c,d) -> bdd_of (aux a c) (union (aux a d) (union (aux b c) (aux b d)))
-          in
-          Hashtbl.add hash_or (ref_repr m m') res;
-           res
-  in aux
-  
-let bdd_xor =
-  let hash_xor = Hashtbl.create 101 in
-  let rec aux m m' =
-    try Hashtbl.find hash_xor (ref_repr m m')
-    with Not_found ->
-          let res =
-            match m, m' with
-            | T, T -> F
-            | F,a | a,F -> bdd_not a
-            | T,_ | _,T -> failwith "bdd_and: not the same depth"
-            | N(a,b), N(c,d) -> bdd_of (union (aux a c) (aux b d)) (union (aux a d) (aux b c))
-          in
-          Hashtbl.add hash_xor (ref_repr m m') res;
-          res
-  in aux
-
 let rec inter_with_union bdd bdds =
+  (* Computes the intersection bdd \inter (\Bigunion_i bdds[i]) where bdds is a set of bdd *)
   match bdd with
   | F -> F
   | T -> if Bddset.is_empty bdds then F else T
@@ -437,6 +376,7 @@ let improved_consistency m m' width choice =
                                 with Not_found -> Bddsmap.singleton set new_set)
   in
   let split_zero_one bdds =
+    (* Take a bddset as input and return two bdds: one with all the 0-subtrees, and the other with all the 1-subtrees *) 
     Bddset.fold (fun elt (zeroacc, oneacc) ->
         match elt with
         | T -> failwith "test_change_name: not the same size"
@@ -448,17 +388,10 @@ let improved_consistency m m' width choice =
       ) bdds (Bddset.empty, Bddset.empty)
   in
   let rec reduce bddbsset =
-    (*print_endline "reduce";
-    print_string "{"; Bddbddsset.iter (fun (bdd, bdds) -> print_string ((string_of_bdd bdd)^(string_of_bddset bdds)^"\n")) bddbsset; print_string "}";*)
-    match Bddbddsset.cardinal bddbsset > width with
     (* take a layer as input, and return a reduced layer (with width smaller than said), and update the replacement hashtbl *)
+    match Bddbddsset.cardinal bddbsset > width with
     | false -> bddbsset
     | true -> let s1, s2 = choice bddbsset in
-              (*print_endline (string_of_bdd (fst s1));
-              print_endline (string_of_bddset (snd s1));
-              print_endline (string_of_bdd (fst s1));
-              print_endline (string_of_bddset (snd s1));
-              let _ = read_line() in*)
               if fst s1 != fst s2 then failwith "the choice returned two nodes that don't come from the same node";
               let merge_union = Bddset.union (snd s1) (snd s2) in
               add_to_hash replacement (fst s1) (snd s1) merge_union;
@@ -466,7 +399,7 @@ let improved_consistency m m' width choice =
               reduce (Bddbddsset.add (fst s1, merge_union) (Bddbddsset.remove s1 (Bddbddsset.remove s2 bddbsset)))
   in
   let rec compute_layer bddbss =
-    (*print_endline "compute_layer";*)
+    (* Will deal with each layer one by one *)
     let new_layer = Bddbddsset.fold (fun (m, bdds) acc ->
                         match m with
                         | T | F -> acc
@@ -485,13 +418,8 @@ let improved_consistency m m' width choice =
     if Bddbddsset.is_empty new_layer then () else compute_layer (reduce new_layer)
   in
   let rec replace_chain_set (bdd, bdds) =
-    (* Find the new bdd to use (aux function *)
+    (* Find the new bdd to use (aux function) *)
     try let bdd_map = Hashtbl.find replacement (ref bdd) in
-        (*let next_one = Hashtbl.fold (fun k v acc -> match Bddset.is_empty acc with
-                                     | false -> acc
-                                     | true -> if Bddset.compare k bdds = 0 then v else acc
-                         ) bdd_hash Bddset.empty in
-        if Bddset.is_empty next_one then failwith "the bddset is not present" else (replace_chain_set (bdd, next_one))*)
         try (bdd, Bddsmap.find bdds bdd_map)
         with Not_found -> (bdd, bdds)
     with Not_found -> (bdd, bdds)
@@ -522,17 +450,6 @@ let random_heuristic_improved_consistency bddbss =
                  with Not_found -> Hashtbl.add bdd_exists (ref bdd) bdds; (bddacc, bddsacc), acc
     ) bddbss ((F, Bddset.empty), (F, Bddset.empty))
 
-let _ = Random.init 0
-  
-let starting = limit (bdd_of_bitlistset (random_set 6)) 2 bdd_merge_value_heuristic
-
-let _ = Random.init 1
-             
-let wrt = bdd_of_bitlistset (random_set 6)
-
-let result = improved_consistency starting wrt 4 random_heuristic_improved_consistency
-           
-let _ = print_endline (draw_dot result)
 
 
 

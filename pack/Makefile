@@ -1,6 +1,6 @@
 OCB = ocamlbuild
 
-all: main.ml bdd.ml
+all: main.ml
 	$(OCB) main.native
 
 clean:
