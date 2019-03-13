@@ -1,6 +1,6 @@
 (* BDDs are trees and nodes have a 0-edge (first of the couple) and a 1-edge (second element of the couple) *)
 type bdd = T | F | N of bdd * bdd
-
+                      
 (* The hashtable that will contain all the trees *)
 let main_hash = Hashtbl.create 101
 
@@ -31,14 +31,14 @@ let depth_card  =
   let rec aux m =
     try Hashtbl.find data (ref m)
     with Not_found ->
-      match m with
-      | T -> Hashtbl.add data (ref T) (0,1); (0,1)
-      | F -> Hashtbl.add data (ref F) (0,0); (0,0)
-      | N(a,b) -> let (d1,c1),(d2,c2) = aux a, aux b in
-                  let res = (max d1 d2+1, match c1+c2 < 0 with (* With this I deal with overflows *)
-                                        | true -> max_int
-                                        | false -> c1+c2) in
-                  Hashtbl.add data (ref m) res; res
+      let res = match m with
+        | T -> (0,1)
+        | F -> (0,0)
+        | N(a,b) -> let (d1,c1),(d2,c2) = aux a, aux b in
+                    (max d1 d2+1, let sum = c1 + c2 in if sum < 0 then max_int else sum)
+      in
+      Hashtbl.add data (ref m) res;
+      res
   in aux
    
 (* These two functions return in constant time amortized (I think, if there is a lot of accesses) *)   
@@ -46,9 +46,10 @@ let depth m = fst (depth_card m)
 
 let cardinal m = snd (depth_card m)
 
-let width m =
-  (* Give the width of a bdd *)
+let aux_width m =
+  (* Give the width of each layer of a bdd in an array*)
   let visited = Hashtbl.create 101 in
+  (* At the index d there is the width of the depth d *)
   let widths = Array.make (depth m + 1) 0 in
   let rec aux m =
     try Hashtbl.find visited (ref m)
@@ -60,11 +61,11 @@ let width m =
           | N(a,b) -> let _ = aux a, aux b in ()
   in
   aux m;
-  Array.fold_left (fun acc elt ->
+  widths
+
+let width m = Array.fold_left (fun acc elt ->
       max acc elt
-    ) 0 widths, widths
-
-
+    ) 0 (aux_width m)
 
 
 
@@ -130,9 +131,8 @@ let bdd_not =
     with Not_found ->
           let res =
             match m with
-            | T -> F
-            | F -> T
             | N(a,b) -> bdd_of (aux b) (aux a)
+            | _ -> m
           in
           Hashtbl.add hash_and (ref m) res;
           res
@@ -161,9 +161,9 @@ let bdd_or =
     with Not_found ->
           let res =
             match m, m' with
-            | F,x | x,F -> x
-            | T,T -> T
-            | T,_ | _,T -> failwith "bdd_or: not the same depth"
+            | T, T -> T
+            | F,_ | _,F -> F
+            | T,_ | _,T -> failwith "bdd_and: not the same depth"
             | N(a,b), N(c,d) -> bdd_of (aux a c) (union (aux a d) (union (aux b c) (aux b d)))
           in
           Hashtbl.add hash_or (ref m,ref m') res;
@@ -177,8 +177,8 @@ let bdd_xor =
     with Not_found ->
           let res =
             match m, m' with
-            | T, T -> F
-            | F,a | a,F -> bdd_not a
+            | T, T -> T
+            | F,_ | _,F -> F
             | T,_ | _,T -> failwith "bdd_and: not the same depth"
             | N(a,b), N(c,d) -> bdd_of (union (aux a c) (aux b d)) (union (aux a d) (aux b c))
           in

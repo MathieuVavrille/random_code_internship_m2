@@ -184,43 +184,43 @@ let limited_bdd_of_bitlistset bls width heuristic =
   let replacement = Hashtbl.create 101 in
   let hash_split = Hashtbl.create 101 in
   let rec reduce layer =
-         match Blsetset.cardinal layer > width with
+         match Bvsetset.cardinal layer > width with
          | false -> layer
          | true -> let s1, s2 = heuristic layer nb_paths_to in
-                   let s = Blset.union s1 s2 in
-                   if Blset.compare s s1 != 0 then (increase_value nb_paths_to s (Hashtbl.find nb_paths_to s1);
+                   let s = Bvset.union s1 s2 in
+                   if Bvset.compare s s1 != 0 then (increase_value nb_paths_to s (Hashtbl.find nb_paths_to s1);
                                                     Hashtbl.add replacement s1 s);
-                   if Blset.compare s s2 != 0 then (increase_value nb_paths_to s (Hashtbl.find nb_paths_to s2);
+                   if Bvset.compare s s2 != 0 then (increase_value nb_paths_to s (Hashtbl.find nb_paths_to s2);
                                                     Hashtbl.add replacement s2 s);
-                   reduce (Blsetset.add s (Blsetset.remove s1 (Blsetset.remove s2 layer)))
+                   reduce (Bvsetset.add s (Bvsetset.remove s1 (Bvsetset.remove s2 layer)))
        in
-  let rec compute_layer blsset = match Blsetset.is_empty blsset, Blsetset.exists (fun x -> Blset.exists (fun y -> y != []) x) blsset with
+  let rec compute_layer blsset = match Bvsetset.is_empty blsset, Bvsetset.exists (fun x -> Bvset.exists (fun y -> y != []) x) blsset with
     | true, _ | _, false -> ()
     | _ ->
-       let new_layer = Blsetset.fold (fun t acc ->
+       let new_layer = Bvsetset.fold (fun t acc ->
                            let (zero, one) = split_zero_one t in
                            Hashtbl.add hash_split t (zero, one);
-                           match Blset.is_empty zero, Blset.is_empty one with
+                           match Bvset.is_empty zero, Bvset.is_empty one with
                            | true, true -> acc
                            | true, false -> increase_value nb_paths_to one (Hashtbl.find nb_paths_to t);
-                                            Blsetset.add one acc
+                                            Bvsetset.add one acc
                            | false, true -> increase_value nb_paths_to zero (Hashtbl.find nb_paths_to t);
-                                            Blsetset.add zero acc
+                                            Bvsetset.add zero acc
                            | false, false -> increase_value nb_paths_to one (Hashtbl.find nb_paths_to t);
                                              increase_value nb_paths_to zero (Hashtbl.find nb_paths_to t);
-                                             Blsetset.add zero (Blsetset.add one acc)
-                         ) blsset Blsetset.empty in
+                                             Bvsetset.add zero (Bvsetset.add one acc)
+                         ) blsset Bvsetset.empty in
        compute_layer (reduce new_layer)
   in
-  compute_layer (Blsetset.add bls (Blsetset.empty));
+  compute_layer (Bvsetset.add bls (Bvsetset.empty));
   let already_computed = Hashtbl.create 101 in
   let rec generate_bdd blset =
     try Hashtbl.find already_computed blset
     with Not_found -> 
-          match Blset.is_empty blset with
+          match Bvset.is_empty blset with
           | true -> Hashtbl.add already_computed blset F;F
           | false ->
-             match Blset.exists (fun x -> x != []) blset with
+             match Bvset.exists (fun x -> x != []) blset with
              | true ->
                 let (zero, one) = Hashtbl.find hash_split blset in (*split_zero_one blset in *)
                 let nextone = bdd_of (generate_bdd (replace_chain replacement zero (fun x -> x))) (generate_bdd (replace_chain replacement one (fun x -> x))) in
@@ -231,31 +231,31 @@ let limited_bdd_of_bitlistset bls width heuristic =
   generate_bdd bls
 
 let first_come_heuristic blss nb_paths_to =
-  Blsetset.fold (fun e a -> begin match e, a with
-      | elt, acc when Blset.is_empty elt-> acc
-      | elt, (a, _) when Blset.is_empty a -> (elt, Blset.empty)
-      | elt, (a, b) when Blset.is_empty b -> (a, elt)
+  Bvsetset.fold (fun e a -> begin match e, a with
+      | elt, acc when Bvset.is_empty elt-> acc
+      | elt, (a, _) when Bvset.is_empty a -> (elt, Bvset.empty)
+      | elt, (a, b) when Bvset.is_empty b -> (a, elt)
       | elt, acc -> acc end
-    ) blss (Blset.empty, Blset.empty)
+    ) blss (Bvset.empty, Bvset.empty)
 
 let find hash key =
   Hashtbl.fold (fun k v acc ->
-      if Blset.compare k key = 0 then v else acc
+      if Bvset.compare k key = 0 then v else acc
     ) hash (-1)
   
 let merge_value_heuristic blss nb_paths_to =
   let rec aux blss acc =
-    try let elt = Blsetset.choose blss in
+    try let elt = Bvsetset.choose blss in
         let nb_paths_to_elt = find nb_paths_to elt in
-        let new_blss = Blsetset.remove elt blss in
-        aux new_blss (Blsetset.fold (fun elt2 (best, best_value) ->
+        let new_blss = Bvsetset.remove elt blss in
+        aux new_blss (Bvsetset.fold (fun elt2 (best, best_value) ->
                           (* We compute the merge value as defined in my report *)
-                          let current_value = nb_paths_to_elt*(Blset.cardinal (Blset.diff elt2 elt)) + (find nb_paths_to elt2)*(Blset.cardinal (Blset.diff elt elt2)) in
+                          let current_value = nb_paths_to_elt*(Bvset.cardinal (Bvset.diff elt2 elt)) + (find nb_paths_to elt2)*(Bvset.cardinal (Bvset.diff elt elt2)) in
                           if current_value < best_value then ((elt, elt2), current_value) else (best, best_value)
                         ) new_blss acc)
     with Not_found -> acc
   in
-  fst (aux blss ((Blset.empty, Blset.empty),max_int))
+  fst (aux blss ((Bvset.empty, Bvset.empty),max_int))
 
 (*let rec a_lot_of_tests size =
   match size < 12 with
@@ -390,7 +390,7 @@ let improved_consistency m m' width choice =
        bdd_of (generate_new_bdd a zero) (generate_new_bdd b one)
   in
   compute_layer (Bddbddsset.singleton (m, Bddset.singleton m'));
-  generate_new_bdd m (Bddset.singleton (m'))
+  generate_new_bdd m (Bddset.singleton m')
 
 
 let random_heuristic_improved_consistency bddbss =

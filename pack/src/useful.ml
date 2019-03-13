@@ -12,7 +12,7 @@ let string_of_list f l = "["^(List.fold_left (fun acc elt -> acc^(f elt)^";") ""
 (**********************)
 (* Module definitions *)
 
-(* Set of BDD using the structural equality *)
+(* Set of BDD using the structural equality/comparison *)
 module Orderedbdd =
   struct
     type t = bdd
@@ -24,7 +24,8 @@ module Bddset = Set.Make(Orderedbdd)
 let string_of_bddset b = 
   "{"^(Bddset.fold (fun elt acc -> string_of_bdd elt^" ; "^acc) b "")^"}"
                        
-module OrderedBitList =
+module OrderedBitVector =
+  (* Actually a bit-list *)
   struct
     type t = bool list
     let rec compare l1 l2 = match l1, l2 with
@@ -37,15 +38,15 @@ module OrderedBitList =
   end
 
 (* Set of bit-vectors *)
-module Blset = Set.Make(OrderedBitList)
+module Bvset = Set.Make(OrderedBitVector)
 
 let string_of_blset b =
-  "{"^(Blset.fold (fun elt acc -> string_of_list string_of_bool elt^" ; "^acc) b "")^"}"
+  "{"^(Bvset.fold (fun elt acc -> string_of_list string_of_bool elt^" ; "^acc) b "")^"}"
 
-module Blsetset = Set.Make(Blset)
+module Bvsetset = Set.Make(Bvset)
 
 let string_of_blsetset b = 
-  "{"^(Blsetset.fold (fun elt acc -> string_of_blset elt^" ; "^acc) b "")^"}"
+  "{"^(Bvsetset.fold (fun elt acc -> string_of_blset elt^" ; "^acc) b "")^"}"
 
                 
 module Orderedbddbddlist =
@@ -74,19 +75,19 @@ let bitlist_from_int integer size =
 
 let split_zero_one set =
   (* Splits a bit-list set into the ones that starts with zero and the ones that start with one *)
-  Blset.fold
+  Bvset.fold
     (fun elt (zero, one) -> match elt with
                             | [] -> (zero, one)
-                            | true::q -> (zero, Blset.add q one)
-                            | false::q -> (Blset.add q zero, one)
-    ) set (Blset.empty, Blset.empty)
+                            | true::q -> (zero, Bvset.add q one)
+                            | false::q -> (Bvset.add q zero, one)
+    ) set (Bvset.empty, Bvset.empty)
   
 let rec bdd_of_bitlistset set =
   (* Returns the bdd representing the bitlistset *)
-  match Blset.is_empty set with
+  match Bvset.is_empty set with
   | true -> F
   | false ->
-     match Blset.exists (fun x -> x != []) set with
+     match Bvset.exists (fun x -> x != []) set with
      | true -> let (zero, one) = split_zero_one set in
                bdd_of (bdd_of_bitlistset zero) (bdd_of_bitlistset one)
      | false -> T
@@ -94,7 +95,7 @@ let rec bdd_of_bitlistset set =
 let bdd_of_intlist l size =
   (* Return the bdd representing the list of integers represented on -size- bits *)
   bdd_of_bitlistset (List.fold_left (fun acc elt ->
-                     Blset.add (bitlist_from_int elt size) acc) Blset.empty l)
+                     Bvset.add (bitlist_from_int elt size) acc) Bvset.empty l)
 
 let bdd_of_int integer size depth =
   (* Return the bdd representing a single integer (on size bits) and the bdd have depth depth *)
@@ -108,9 +109,9 @@ let bdd_of_int integer size depth =
    
 let rec bitlistset_from_bdd t = match t with
   (* Returns the bitlistset represented by the bdd *)
-  | F -> Blset.empty
-  | T -> Blset.add [] Blset.empty
-  | N(a,b) -> Blset.union (Blset.map (fun l -> false::l) (bitlistset_from_bdd a)) (Blset.map (fun l -> true::l) (bitlistset_from_bdd b))
+  | F -> Bvset.empty
+  | T -> Bvset.add [] Bvset.empty
+  | N(a,b) -> Bvset.union (Bvset.map (fun l -> false::l) (bitlistset_from_bdd a)) (Bvset.map (fun l -> true::l) (bitlistset_from_bdd b))
 
             
 let rec pow a n =
@@ -124,10 +125,10 @@ let random_set max =
     match current with
     | -1 -> acc
     | n -> match Random.bool () with
-           | true -> aux (Blset.add (bitlist_from_int current max) acc) (current-1)
+           | true -> aux (Bvset.add (bitlist_from_int current max) acc) (current-1)
            | false -> aux acc (current-1)
   in
-  aux Blset.empty (pow 2 max)
+  aux Bvset.empty (pow 2 max)
 
     
 let dot_file m filename =
