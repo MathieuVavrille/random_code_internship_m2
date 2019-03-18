@@ -3,13 +3,17 @@ open Useful
 open Cstrbdd
 
 let _ = Random.init 0
-  
-let starting = limit (bdd_of_bitlistset (random_set 6)) 2 bdd_merge_value_heuristic
 
-let _ = Random.init 1
-             
-let wrt = bdd_of_bitlistset (random_set 6)
-
-let result = improved_consistency starting wrt 4 random_heuristic_improved_consistency
-           
-let _ = dot_file result "graph.dot"
+(*let _ = for j=5 to 15 do
+          print_endline ("Size "^(string_of_int j));
+          let random_bdd = limit (bdd_of_bitvectset (random_set j)) 6 bdd_merge_value_heuristic in
+          for i=1 to depth random_bdd do
+            let a,b = split_backtrack_at_depth random_bdd i in
+            print_string (string_of_int (Array.fold_left (fun acc elt -> acc + elt) (Array.fold_left (fun acc elt -> acc + elt) 0 (array_width a)) (array_width b))^" ");
+          done;
+          print_newline ();
+          let a,b = split_backtrack_optimal_width random_bdd in
+          let c,d = split_backtrack_optimal_next_width random_bdd in
+          print_endline (string_of_int (Array.fold_left (fun acc elt -> acc + elt) (Array.fold_left (fun acc elt -> acc + elt) 0 (array_width a)) (array_width b)));
+          print_endline (string_of_int (Array.fold_left (fun acc elt -> acc + elt) (Array.fold_left (fun acc elt -> acc + elt) 0 (array_width c)) (array_width d)));
+        done *)

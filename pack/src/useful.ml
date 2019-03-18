@@ -23,7 +23,10 @@ module Bddset = Set.Make(Orderedbdd)
 
 let string_of_bddset b = 
   "{"^(Bddset.fold (fun elt acc -> string_of_bdd elt^" ; "^acc) b "")^"}"
-                       
+
+module Bddsmap = Map.Make(Bddset)
+
+               
 module OrderedBitVector =
   (* Actually a bit-list *)
   struct
@@ -60,12 +63,11 @@ module Orderedbddbddlist =
   
 module Bddbddsset = Set.Make(Orderedbddbddlist)
 
-module Bddsmap = Map.Make(Bddset)
 
 
 (* Functions to create or extract bdds *)
                
-let bitlist_from_int integer size =
+let bitvect_from_int integer size =
   (* Get the binary representation of an integer on size bits *)
   let rec aux acc integer size =
     match size with
@@ -82,20 +84,20 @@ let split_zero_one set =
                             | false::q -> (Bvset.add q zero, one)
     ) set (Bvset.empty, Bvset.empty)
   
-let rec bdd_of_bitlistset set =
+let rec bdd_of_bitvectset set =
   (* Returns the bdd representing the bitlistset *)
   match Bvset.is_empty set with
   | true -> F
   | false ->
      match Bvset.exists (fun x -> x != []) set with
      | true -> let (zero, one) = split_zero_one set in
-               bdd_of (bdd_of_bitlistset zero) (bdd_of_bitlistset one)
+               bdd_of (bdd_of_bitvectset zero) (bdd_of_bitvectset one)
      | false -> T
 
 let bdd_of_intlist l size =
   (* Return the bdd representing the list of integers represented on -size- bits *)
-  bdd_of_bitlistset (List.fold_left (fun acc elt ->
-                     Bvset.add (bitlist_from_int elt size) acc) Bvset.empty l)
+  bdd_of_bitvectset (List.fold_left (fun acc elt ->
+                     Bvset.add (bitvect_from_int elt size) acc) Bvset.empty l)
 
 let bdd_of_int integer size depth =
   (* Return the bdd representing a single integer (on size bits) and the bdd have depth depth *)
@@ -107,11 +109,20 @@ let bdd_of_int integer size depth =
   in
   aux T integer size depth
    
-let rec bitlistset_from_bdd t = match t with
+let bitvectset_from_bdd =
   (* Returns the bitlistset represented by the bdd *)
-  | F -> Bvset.empty
-  | T -> Bvset.add [] Bvset.empty
-  | N(a,b) -> Bvset.union (Bvset.map (fun l -> false::l) (bitlistset_from_bdd a)) (Bvset.map (fun l -> true::l) (bitlistset_from_bdd b))
+  let computed = Hashtbl.create 101 in
+  let rec aux t =
+    try Hashtbl.find computed (ref t)
+    with Not_found ->
+          let res = match t with
+            | F -> Bvset.empty
+            | T -> Bvset.add [] Bvset.empty
+            | N(a,b) -> Bvset.union (Bvset.map (fun l -> false::l) (aux a)) (Bvset.map (fun l -> true::l) (aux b))
+          in
+          Hashtbl.add computed (ref t) res;
+          res
+  in aux
 
             
 let rec pow a n =
@@ -125,11 +136,16 @@ let random_set max =
     match current with
     | -1 -> acc
     | n -> match Random.bool () with
-           | true -> aux (Bvset.add (bitlist_from_int current max) acc) (current-1)
+           | true -> aux (Bvset.add (bitvect_from_int current max) acc) (current-1)
            | false -> aux acc (current-1)
   in
   aux Bvset.empty (pow 2 max)
 
+let rec complete_bdd depth = match depth with
+  | 0 -> T
+  | _ -> let res = complete_bdd (depth-1) in
+         bdd_of res res
+  
     
 let dot_file m filename =
   (* Outputs a string that can be processed with graphviz dot *)
@@ -162,6 +178,6 @@ let dot_file m filename =
   s := !s^"}";
   let open Printf in
   let oc = open_out filename in
-  fprintf oc "%sn" !s;
+  fprintf oc "%s\n" !s;
   close_out oc;
   

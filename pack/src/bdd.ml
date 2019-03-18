@@ -46,7 +46,7 @@ let depth m = fst (depth_card m)
 
 let cardinal m = snd (depth_card m)
 
-let aux_width m =
+let array_width m =
   (* Give the width of each layer of a bdd in an array*)
   let visited = Hashtbl.create 101 in
   (* At the index d there is the width of the depth d *)
@@ -65,7 +65,7 @@ let aux_width m =
 
 let width m = Array.fold_left (fun acc elt ->
       max acc elt
-    ) 0 (aux_width m)
+    ) 0 (array_width m)
 
 
 

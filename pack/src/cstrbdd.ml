@@ -2,12 +2,12 @@ open Bdd
 open Useful
 
 
-let multiple_mdd_consistency m bdds = (* I am almost sure that there is a bug *)
+let multiple_mdd_consistency m bdds =
   (* ensures MDD consistency on m wrt m' and returns m *)
-  let zero = Hashtbl.create 101 in (* all the nodes whose 0-edge is consistent *)
-  let one = Hashtbl.create 101 in (* all the nodes whose 1-edge is consistent *)
+  let zero_support = Hashtbl.create 101 in (* all the nodes whose 0-edge is consistent *)
+  let one_support = Hashtbl.create 101 in (* all the nodes whose 1-edge is consistent *)
   let inter = Hashtbl.create 101 in (* just a set, but faster by using hashtbl *)
-  let rec aux m m' =
+  let rec search_support m m' =
     try Hashtbl.find inter (ref m,ref m')
     with Not_found -> 
           match m, m' with
@@ -15,34 +15,34 @@ let multiple_mdd_consistency m bdds = (* I am almost sure that there is a bug *)
           | T, _ -> m'
           | N(a,b), T -> failwith "mdd_consistency: the bdds do not have the same size"
           | N(a,b), N(c,d) ->
-             let e,f = aux a c, aux b d in
+             let e,f = search_support a c, search_support b d in
              let new_bdd = bdd_of e f in
              Hashtbl.add inter (ref m,ref m') new_bdd;
              begin
                match e, f with
                | F, F -> new_bdd
-               | F, _ -> Hashtbl.add one (ref m) (); new_bdd
-               | _, F -> Hashtbl.add zero (ref m) (); new_bdd
-               | _ -> Hashtbl.add zero (ref m) (); Hashtbl.add one (ref m) (); new_bdd
+               | F, _ -> Hashtbl.add one_support (ref m) (); new_bdd
+               | _, F -> Hashtbl.add zero_support (ref m) (); new_bdd
+               | _ -> Hashtbl.add zero_support (ref m) (); Hashtbl.add one_support (ref m) (); new_bdd
              end
   in
-  Bddset.iter (fun m' -> let _ = aux m m' in ()) bdds;
-  let visited = Hashtbl.create 101 in
+  Bddset.iter (fun m' -> let _ = search_support m m' in ()) bdds;
+  let computed = Hashtbl.create 101 in
   let rec aux2 m =
-    try Hashtbl.find visited (ref m)
+    try Hashtbl.find computed (ref m)
     with Not_found -> 
           match m with
           | F -> F
           | T -> T
           | N(a,b) ->
              let res = 
-               match Hashtbl.find_opt zero (ref m), Hashtbl.find_opt one (ref m) with
+               match Hashtbl.find_opt zero_support (ref m), Hashtbl.find_opt one_support (ref m) with
                | None, None -> F
                | None, Some _ -> bdd_of F (aux2 b)
                | Some _, None -> bdd_of (aux2 a) F
                | Some _, Some _ -> bdd_of (aux2 a) (aux2 b)
              in
-             Hashtbl.add visited (ref m) res;
+             Hashtbl.add computed (ref m) res;
              res
   in aux2 m
 
@@ -53,19 +53,19 @@ let mdd_consistency m m' = multiple_mdd_consistency m (Bddset.singleton m')
 
   
 
-  
+(* Split functions: returns two disjoint BDDs such that the union of them is the original BDD *)
       
-let rec split_backtrack m =
+let rec split_backtrack_first m =
   (* Split the bdd into two disjoint bdds such that the union of them is the original bdd *)
   match m with
-  | T | F -> failwith "split_backtrack: Can't split leaves"
-  | N(b,a) when is_leaf b -> let c,d = split_backtrack a in
+  | T | F -> failwith "split_backtrack: The BDD has cardinal 1 (or maybe 0) and can't be splitted"
+  | N(b,a) when is_leaf b -> let c,d = split_backtrack_first a in
                              bdd_of b c, bdd_of b d
-  | N(a,b) when is_leaf b -> let c,d = split_backtrack a in
+  | N(a,b) when is_leaf b -> let c,d = split_backtrack_first a in
                              bdd_of c b, bdd_of d b
   | N(a,b) -> bdd_of a F, bdd_of F b
 
-let split_backrack_at_depth m d =
+let split_backtrack_at_depth m d =
   let computed = Hashtbl.create 101 in
   let rec aux m =
     try Hashtbl.find computed (ref m)
@@ -75,12 +75,59 @@ let split_backrack_at_depth m d =
             | _, F -> F,F
             | false, N(a,b) -> let (aa,ab), (ba,bb) = aux a, aux b in
                                bdd_of aa ba,bdd_of ab bb
-            | true, N(a,b) -> a,b
+            | true, N(a,b) -> bdd_of a F,bdd_of F b
           in
           Hashtbl.add computed (ref m) res;
           res
   in
   aux m
+
+let split_backtrack_optimal_width m =
+  let rec aux (best_val, best_couple) current_depth =
+    match current_depth with
+    | 0 -> (best_val, best_couple)
+    | _ -> let a,b = split_backtrack_at_depth m current_depth in
+           let split_val = Array.fold_left (fun acc elt -> acc + elt) (Array.fold_left (fun acc elt -> acc + elt) 0 (array_width a)) (array_width b) in
+           aux (if split_val < best_val then (split_val, (a,b)) else (best_val, best_couple)) (current_depth-1)
+  in
+  snd (aux (max_int, (F,F)) (depth m))
+
+let split_backtrack_optimal_next_width m =
+  let zero_one_at_depth = Array.make (depth m + 1) (Bddset.empty, Bddset.empty) in
+  let visited = Hashtbl.create 101 in
+  let rec fill m =
+    try Hashtbl.find visited (ref m)
+    with Not_found ->
+          Hashtbl.add visited (ref m) ();
+          match m with
+          | T | F -> ()
+          | N(a,b) ->
+             let z, o = zero_one_at_depth.(depth m) in
+             zero_one_at_depth.(depth m) <- (if is_leaf a then z else Bddset.add a z), if is_leaf b then o else Bddset.add b o;
+             fill a;
+             fill b;
+  in
+  fill m;
+  let a_width = array_width m in
+  let max_val = ref (-1) in
+  let max_depth = ref (-1) in
+  for i = 1 to depth m do
+    let (b1,b2) = zero_one_at_depth.(i) in
+    let nb_merged = 2*a_width.(i) - (Bddset.cardinal b1) - (Bddset.cardinal b2) in
+    print_endline ("nb_m "^(string_of_int nb_merged)^" i = "^(string_of_int i)^" ");
+    if !max_val <= nb_merged && (not (Bddset.is_empty b1)) && (not (Bddset.is_empty b2))
+    then (max_val := nb_merged; max_depth := i)
+  done;
+  (*let nb_merged_array = Array.map2 (fun w (b1, b2) -> 2*w - (Bddset.cardinal b1) - (Bddset.cardinal b2), (b1, b2)) (array_width m) zero_one_at_depth in
+  print_endline (string_of_array (fun (x,(b1, b2)) -> (string_of_int x)^"|"^(string_of_int (Bddset.cardinal b1))^"|"^(string_of_int (Bddset.cardinal b1))) nb_merged_array);
+  let nb_merged_max, depth_opti = Array.fold_left (fun (value, index) (nb_merged, (b1, b2)) -> 
+                                      if value < nb_merged && (not (Bddset.is_empty b1)) && (Bddset.compare b1 (Bddset.singleton F) != 0) && (Bddset.compare b2 (Bddset.singleton F) != 0) then (nb_merged, depth (Bddset.choose b1) + 1) else (value, index)
+                                    ) (-1, -1) nb_merged_array
+  in *)
+  if !max_val = -1 then failwith "Can't split the bdd" else split_backtrack_at_depth m (!max_depth)
+
+
+  
   
 let increase_value hash key value =
     Hashtbl.add hash key (value + try Hashtbl.find hash key with Not_found -> 0)
@@ -177,7 +224,7 @@ let bdd_merge_value_heuristic bdds nb_paths_to =
   fst (aux bdds ((F, F),max_int))
   
   
-let limited_bdd_of_bitlistset bls width heuristic =
+let limited_bdd_of_bitvectset bls width heuristic =
   (* TODO BUG This function returns bdds that have bigger width... *)
   let nb_paths_to = Hashtbl.create 101 in
   Hashtbl.add nb_paths_to bls 1;
@@ -256,25 +303,6 @@ let merge_value_heuristic blss nb_paths_to =
     with Not_found -> acc
   in
   fst (aux blss ((Bvset.empty, Bvset.empty),max_int))
-
-(*let rec a_lot_of_tests size =
-  match size < 12 with
-  | false -> ()
-  | true -> print_string ("BDD OF SIZE "^(string_of_int size));print_newline();
-            let randomset = bdd_of_bitlistset (random_set size) in
-            let rec aux width_max =
-              match width_max with
-              | 1 -> ()
-              | _ -> let random_bdd = limit randomset width_max bdd_first_come_heuristic in
-                     let improved_bdd = limit randomset width_max bdd_merge_value_heuristic in
-                     print_string ("Width "^(string_of_int width_max)^"  --  Random "^(string_of_int (cardinal random_bdd))^"  --  Improved "^(string_of_int (cardinal improved_bdd))); print_newline();
-                     if fst (width random_bdd) > width_max then print_string "fail random\n";
-                     if fst (width improved_bdd) > width_max then print_string "fail improved\n";
-                     aux (width_max - 1)
-            in
-            aux (4*size);
-            print_newline();
-            a_lot_of_tests (size + 1)*)
 
 let extract_depth_k m wanted_depth =
   (* give the bddset of all the bdds at depth k in m, that are now a chain of N(a,a), and the bdd (to have it of the good depth *)
