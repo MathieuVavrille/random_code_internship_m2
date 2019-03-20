@@ -119,6 +119,22 @@ let diff =
       Hashtbl.add diff_hash (ref m,ref m') t;
       t
   in aux
+
+let subset =
+  (* Returns true if the first arg is a subset of the second arg *)
+  let subset_hash = Hashtbl.create 101 in
+  let rec aux m m' =
+    try Hashtbl.find subset_hash (ref m,ref m')
+    with Not_found ->
+      let res = match m, m' with
+        | F, _ | _, T -> true
+        | _, F -> false
+        | T, N _ -> failwith "subset: the bdds does not have the same size"
+        | N(a,b), N(c,d) -> (aux a c) && (aux b d)
+      in
+      Hashtbl.add subset_hash (ref m,ref m') res;
+      res
+  in aux
    
    
 (**********************)

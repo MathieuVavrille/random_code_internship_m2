@@ -43,13 +43,13 @@ module OrderedBitVector =
 (* Set of bit-vectors *)
 module Bvset = Set.Make(OrderedBitVector)
 
-let string_of_blset b =
+let string_of_bvset b =
   "{"^(Bvset.fold (fun elt acc -> string_of_list string_of_bool elt^" ; "^acc) b "")^"}"
 
 module Bvsetset = Set.Make(Bvset)
 
-let string_of_blsetset b = 
-  "{"^(Bvsetset.fold (fun elt acc -> string_of_blset elt^" ; "^acc) b "")^"}"
+let string_of_bvsetset b = 
+  "{"^(Bvsetset.fold (fun elt acc -> string_of_bvset elt^" ; "^acc) b "")^"}"
 
                 
 module Orderedbddbddlist =
@@ -67,7 +67,7 @@ module Bddbddsset = Set.Make(Orderedbddbddlist)
 
 (* Functions to create or extract bdds *)
                
-let bitvect_from_int integer size =
+let bitvect_of_int integer size =
   (* Get the binary representation of an integer on size bits *)
   let rec aux acc integer size =
     match size with
@@ -97,7 +97,7 @@ let rec bdd_of_bitvectset set =
 let bdd_of_intlist l size =
   (* Return the bdd representing the list of integers represented on -size- bits *)
   bdd_of_bitvectset (List.fold_left (fun acc elt ->
-                     Bvset.add (bitvect_from_int elt size) acc) Bvset.empty l)
+                     Bvset.add (bitvect_of_int elt size) acc) Bvset.empty l)
 
 let bdd_of_int integer size depth =
   (* Return the bdd representing a single integer (on size bits) and the bdd have depth depth *)
@@ -109,7 +109,7 @@ let bdd_of_int integer size depth =
   in
   aux T integer size depth
    
-let bitvectset_from_bdd =
+let bitvectset_of_bdd =
   (* Returns the bitlistset represented by the bdd *)
   let computed = Hashtbl.create 101 in
   let rec aux t =
@@ -136,7 +136,7 @@ let random_set max =
     match current with
     | -1 -> acc
     | n -> match Random.bool () with
-           | true -> aux (Bvset.add (bitvect_from_int current max) acc) (current-1)
+           | true -> aux (Bvset.add (bitvect_of_int current max) acc) (current-1)
            | false -> aux acc (current-1)
   in
   aux Bvset.empty (pow 2 max)

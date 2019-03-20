@@ -188,44 +188,41 @@ let bdd_first_come_heuristic bdds paths =
       | elt, (a, F) -> (a, elt)
       | elt, acc -> acc end
     ) bdds (F,F)
-
-let cardinal_inter m m' =
-  (* computes the cardinal of m\m' *)
-  let visited = Hashtbl.create 101 in
-  let rec aux m m' =
-    try Hashtbl.find visited (ref m,ref m')
-    with Not_found -> 
-      let res = match m, m' with
-        | T,T -> 1
-        | F,_ | _,F -> 0
-        | a,T | T, a -> aux a T (* should not happen *)
-        | N(a,b), N(c,d) -> (aux a b) + (aux b d)
-      in
-      Hashtbl.add visited (ref m,ref m') res;
-      res
-  in
-  aux m m'
+  
+let bdd_merge_value_first_bdd_heuristic bdds nb_paths_to =
+  let elt = Bddset.choose bdds in
+  let nb_paths_to_elt = Hashtbl.find nb_paths_to (ref elt) in
+  let card_elt = cardinal elt in
+  let new_blss = Bddset.remove elt bdds in
+  fst (Bddset.fold (fun elt2 (best, best_value) ->
+                    (* We compute the merge value as defined in my report *)
+                    let cardinal_two = cardinal (intersection elt elt2) in
+                    let current_value = nb_paths_to_elt*(cardinal elt2 - cardinal_two) + (Hashtbl.find nb_paths_to (ref elt2))*(card_elt - cardinal_two) in
+                    if (current_value < best_value || best_value = max_int) then ((elt, elt2), current_value) else (best, best_value)
+                  ) new_blss ((F, F),max_int))
   
 let bdd_merge_value_heuristic bdds nb_paths_to =
-  let rec aux bdds acc =
-    (* the try is here to say that when the set is empty, stop searching *)
-    try let elt = Bddset.choose bdds in
-        let nb_paths_to_elt = Hashtbl.find nb_paths_to (ref elt) in
-        let card_elt = cardinal elt in
-        let new_blss = Bddset.remove elt bdds in
-        aux new_blss (Bddset.fold (fun elt2 (best, best_value) ->
-                          (* We compute the merge value as defined in my report *)
-                          let cardinal_two = cardinal_inter elt elt2 in
-                          let current_value = nb_paths_to_elt*(cardinal elt2 - cardinal_two) + (Hashtbl.find nb_paths_to (ref elt2))*(card_elt - cardinal_two) in
-                          if (current_value < best_value || best_value = max_int) then ((elt, elt2), current_value) else (best, best_value)
-                        ) new_blss acc)
-    with Not_found -> acc
+  let rec aux bdds (trees, mv) =
+    if mv = 1 then (trees, mv) else begin
+        (* the try is here to say that when the set is empty, stop searching *)
+        try let elt = Bddset.choose bdds in
+            let nb_paths_to_elt = Hashtbl.find nb_paths_to (ref elt) in
+            let card_elt = cardinal elt in
+            let new_blss = Bddset.remove elt bdds in
+            aux new_blss (Bddset.fold (fun elt2 (best, best_value) ->
+                              (* We compute the merge value as defined in my report *)
+                              let cardinal_two = cardinal (intersection elt elt2) in
+                              let current_value = nb_paths_to_elt*(cardinal elt2 - cardinal_two) + (Hashtbl.find nb_paths_to (ref elt2))*(card_elt - cardinal_two) in
+                              if (current_value < best_value || best_value = max_int) then ((elt, elt2), current_value) else (best, best_value)
+                            ) new_blss (trees, mv))
+        with Not_found -> (trees, mv)
+      end
   in
   fst (aux bdds ((F, F),max_int))
   
   
 let limited_bdd_of_bitvectset bls width heuristic =
-  (* TODO BUG This function returns bdds that have bigger width... *)
+  (* takes as input a BDD and return a BDD of bounded width. The merge heuristic can be changed *)
   let nb_paths_to = Hashtbl.create 101 in
   Hashtbl.add nb_paths_to bls 1;
   let replacement = Hashtbl.create 101 in
@@ -291,7 +288,7 @@ let find hash key =
     ) hash (-1)
   
 let merge_value_heuristic blss nb_paths_to =
-  let rec aux blss acc =
+  let rec aux blss (trees, mv) =
     try let elt = Bvsetset.choose blss in
         let nb_paths_to_elt = find nb_paths_to elt in
         let new_blss = Bvsetset.remove elt blss in
@@ -299,8 +296,8 @@ let merge_value_heuristic blss nb_paths_to =
                           (* We compute the merge value as defined in my report *)
                           let current_value = nb_paths_to_elt*(Bvset.cardinal (Bvset.diff elt2 elt)) + (find nb_paths_to elt2)*(Bvset.cardinal (Bvset.diff elt elt2)) in
                           if current_value < best_value then ((elt, elt2), current_value) else (best, best_value)
-                        ) new_blss acc)
-    with Not_found -> acc
+                        ) new_blss (trees, mv))
+    with Not_found -> (trees,mv)
   in
   fst (aux blss ((Bvset.empty, Bvset.empty),max_int))
 
@@ -429,8 +426,6 @@ let random_heuristic_improved_consistency bddbss =
       | true -> try (bdd,Hashtbl.find bdd_exists (ref bdd)), (bdd, bdds)
                  with Not_found -> Hashtbl.add bdd_exists (ref bdd) bdds; (bddacc, bddsacc), acc
     ) bddbss ((F, Bddset.empty), (F, Bddset.empty))
-
-
 
 
 
