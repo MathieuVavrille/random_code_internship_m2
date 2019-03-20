@@ -2,9 +2,23 @@ open Bdd
 open Useful
 open Cstrbdd
 open Crypto
+open Cstr
+
    
 let _ = Random.init 0
-      
+
+
+let main () = 
+  let in_file = open_in "examples/test.txt" in
+  let lexbuf_file = Lexing.from_channel in_file in
+  let parse () = Parser.main Lexer.token lexbuf_file in
+  let cstrlist = parse () in
+  close_in in_file;
+  print_endline (string_of_list string_of_cstr cstrlist);
+  ()
+
+let _ = main ()
+          
 (*let _ = let rec aux n bdd1 bdd2 = match n with
           | 0 -> ()
           | _ -> 
