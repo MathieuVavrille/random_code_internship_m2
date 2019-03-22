@@ -19,19 +19,19 @@ let sbox_hex =
     [| "E1";"F8";"98";"11";"69";"D9";"8E";"94";"9B";"1E";"87";"E9";"CE";"55";"28";"DF"|];
     [| "8C";"A1";"89";"0D";"BF";"E6";"42";"68";"41";"99";"2D";"0F";"B0";"54";"BB";"16"|]|]
 
-module Smap = Map.Make(Char)
-
+module Chmap = Map.Make(Char)
+             
 let int_of_hex =
-  let conversion = Smap.add 'A' 10 (Smap.add 'B' 11 (Smap.add 'C' 12 (Smap.add 'D' 13 (Smap.add 'E' 14 (Smap.add 'F' 15 Smap.empty))))) in
+  let conversion = Chmap.add 'A' 10 (Chmap.add 'B' 11 (Chmap.add 'C' 12 (Chmap.add 'D' 13 (Chmap.add 'E' 14 (Chmap.add 'F' 15 Chmap.empty))))) in
   let rec aux n map = match n with
     | -1 -> map
-    | _ -> aux (n-1) (Smap.add (string_of_int n).[0] n map)
+    | _ -> aux (n-1) (Chmap.add (string_of_int n).[0] n map)
   in aux 9 conversion
 
 let int_of_hexstring s =
   let res = ref 0 in
   for i=0 to String.length s - 1 do
-    res := try Smap.find s.[i] int_of_hex + 16 * !res with Not_found -> print_string (Char.escaped s.[i]); failwith "test";
+    res := try Chmap.find s.[i] int_of_hex + 16 * !res with Not_found -> print_string (Char.escaped s.[i]); failwith "test";
   done;
   !res
 
@@ -46,12 +46,22 @@ let inverse_sbox =
 let sbox_fun x =
   sbox.(x)
 
-let input_output_diff_sbox =
+let array_diff_sbox_outputs =
+  let res = Array.make 256 Intset.empty in
+  for i=0 to 255 do
+    for j=0 to 255 do
+      res.(i lxor j) <- Intset.add (sbox.(i) lxor sbox.(j)) res.(i lxor j)
+    done
+  done;
+  res
+  
+  
+let input_output_bdd output_fun =
   (* return a bdd where the values are \delta X \concat \delta Y *)
   let rec aux n set =
     let rec aux2 m set2 = match m with
       | -1 -> set2
-      | _ -> let res = (((n lxor m) lsl 8) lor ((sbox_fun n) lxor (sbox_fun m))) in
+      | _ -> let res = (((n lxor m) lsl 8) lor ((output_fun.(n)) lxor (output_fun.(m)))) in
              aux2 (m-1) (Bvset.add (bitvect_of_int res 16) set2)
     in
     match n with
@@ -60,6 +70,20 @@ let input_output_diff_sbox =
   in
   bdd_of_bitvectset (aux 255 Bvset.empty)
 
+let input_output_sbox = input_output_bdd sbox
+
+let input_output_inverse_sbox = input_output_bdd inverse_sbox
+
+                              
+let possible_outputs m bdd_fun =
+  let rec aux m current_bdd_fun acc = match m,current_bdd_fun with
+    | T,_ -> Bddset.add current_bdd_fun acc
+    | F,_ | _, F -> acc
+    | N(a,b), N(c,d) -> aux a c (aux b c acc)
+    | N _, _ -> failwith "possible_outputs: the bdd_fun is not big enough"
+  in
+  aux m bdd_fun Bddset.empty
+  
 let add_zero_end =
   let last = bdd_of T F in
   let computed = Hashtbl.create 101 in
@@ -83,7 +107,7 @@ let gl_double m =
 let gl_triple m =
   bdd_xor (gl_double m) m
       
-let mix_column x0 x1 x2 x3 =
+let mix_column_bdd x0 x1 x2 x3 =
   bdd_xor (gl_double x0) (bdd_xor (gl_triple x1) (bdd_xor x2 x3)),
   bdd_xor (gl_double x1) (bdd_xor (gl_triple x2) (bdd_xor x3 x0)),
   bdd_xor (gl_double x2) (bdd_xor (gl_triple x3) (bdd_xor x0 x1)),
@@ -101,7 +125,7 @@ let gl_thirteen powers =
 let gl_fourteen powers =
   bdd_xor powers.(1) (bdd_xor powers.(2) powers.(3))
   
-let inverse_mix_column y0 y1 y2 y3 =
+let inverse_mix_column_bdd y0 y1 y2 y3 =
   let powers_array = Array.make_matrix 4 4 F in
   powers_array.(0).(0) <- y0;
   powers_array.(1).(0) <- y1;
@@ -116,4 +140,56 @@ let inverse_mix_column y0 y1 y2 y3 =
   bdd_xor (gl_fourteen powers_array.(1)) (bdd_xor (gl_eleven powers_array.(2)) (bdd_xor (gl_thirteen powers_array.(3)) (gl_nine powers_array.(0)))),
   bdd_xor (gl_fourteen powers_array.(2)) (bdd_xor (gl_eleven powers_array.(3)) (bdd_xor (gl_thirteen powers_array.(0)) (gl_nine powers_array.(1)))),
   bdd_xor (gl_fourteen powers_array.(3)) (bdd_xor (gl_eleven powers_array.(0)) (bdd_xor (gl_thirteen powers_array.(1)) (gl_nine powers_array.(2))))
+
+let gl_double_int x =
+  if x land 128 = 0 then x lsl 1 else (x lsl 1) lxor 27
+
+let gl_triple_int x =
+  gl_double_int x lxor x
   
+let mix_column_int x0 x1 x2 x3 =
+  (gl_double_int x0) lxor (gl_triple_int x1) lxor x2 lxor x3,
+  (gl_double_int x1) lxor (gl_triple_int x2) lxor x3 lxor x0,
+  (gl_double_int x2) lxor (gl_triple_int x3) lxor x0 lxor x1,
+  (gl_double_int x3) lxor (gl_triple_int x0) lxor x1 lxor x2
+  
+let generate_program r =
+  let underscores a b c = string_of_int a^"_"^(string_of_int b)^"_"^(string_of_int c) in
+  let s = ref "" in
+  for j=0 to 3 do
+    for k=0 to 3 do
+      s := !s^"XOR(xinit_"^(string_of_int j)^"_"^(string_of_int k)^", k_"^(underscores 0 j k)^", x"^(underscores 0 j k)^");\n"
+    done
+  done;
+  for i= 0 to r-1 do
+    if i <> 0 then (* On first round the bytes of X are computed from the input *)
+        for j=0 to 3 do
+          for k=0 to 3 do
+            s := !s^"XOR(z_"^(underscores (i-1) j k)^", k_"^(underscores i j k)^", x"^(underscores i j k)^");\n"
+          done
+        done;
+    for j=0 to 3 do
+      for k=0 to 3 do
+        s := !s^"SB(x_"^(underscores i j k)^", sx_"^(underscores i j k)^");\n"
+      done
+    done;
+    if i <> r-1 then (* No MC on last round *)
+      for k=0 to 3 do
+        s := !s^"MC(sx_"^(underscores i 0 k)^", sx_"^(underscores i 1 ((k+1) mod 4))^", sx_"^(underscores i 2 ((k+2) mod 4))^", sx_"^(underscores i 3 ((k+3) mod 4))^", z_"^(underscores i 0 k)^", z_"^(underscores i 1 k)^", z_"^(underscores i 2 k)^", z_"^(underscores i 3 k)^");\n"
+      done;
+    for j=0 to 3 do
+      s := !s^"SB(k_"^(underscores i j 3)^", sk_"^(underscores i j 3)^");\n";
+    done;
+    if i <> 0 then begin
+        for j=0 to 3 do
+          s := !s^"XOR(k_"^(underscores i j 0)^",k_"^(underscores (i-1) j 0)^", sk_"^(underscores (i-1) ((j+1) mod 4) 3)^");\n"
+        done;
+        for j=0 to 3 do
+          for k=1 to 3 do
+            s := !s^"XOR(k_"^(underscores i j k)^", k_"^(underscores i j (k-1))^", k_"^(underscores (i-1) j k)^");\n"
+          done
+        done
+      end;
+    done;
+    !s^"&"
+              

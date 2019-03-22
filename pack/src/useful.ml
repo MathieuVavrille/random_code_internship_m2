@@ -63,8 +63,10 @@ module Orderedbddbddlist =
   
 module Bddbddsset = Set.Make(Orderedbddbddlist)
 
+module Strmap = Map.Make(String)
 
-
+module Intset = Set.Make(struct type t = int let compare = Pervasives.compare end)
+              
 (* Functions to create or extract bdds *)
                
 let bitvect_of_int integer size =
@@ -124,7 +126,15 @@ let bitvectset_of_bdd =
           res
   in aux
 
-            
+let int_of_bdd m =
+  let rec aux m acc = match m with
+    | T -> acc
+    | F -> failwith "int_of_bdd: Can't give int from empty set"
+    | N(a,F) -> aux a (2*acc)
+    | N(F,a) -> aux a (2*acc+1)
+    | _ -> failwith "int_of_bdd: Can't give int from set with multiple values"
+  in aux m 0
+
 let rec pow a n =
   match n with
   | 0 -> 1

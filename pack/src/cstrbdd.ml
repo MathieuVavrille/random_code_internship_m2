@@ -51,14 +51,14 @@ let mdd_consistency m m' = multiple_mdd_consistency m (Bddset.singleton m')
 
 
 
-  
-
+ 
 (* Split functions: returns two disjoint BDDs such that the union of them is the original BDD *)
       
 let rec split_backtrack_first m =
   (* Split the bdd into two disjoint bdds such that the union of them is the original bdd *)
   match m with
   | T | F -> failwith "split_backtrack: The BDD has cardinal 1 (or maybe 0) and can't be splitted"
+  | N(T,T) -> bdd_of T F, bdd_of F T
   | N(b,a) when is_leaf b -> let c,d = split_backtrack_first a in
                              bdd_of b c, bdd_of b d
   | N(a,b) when is_leaf b -> let c,d = split_backtrack_first a in
@@ -345,7 +345,7 @@ let rec inter_with_union bdd bdds =
      bdd_of (inter_with_union a zero) (inter_with_union b one)
 
      
-let improved_consistency m m' width choice =
+let improved_consistency_multiple m m' width choice =
   let replacement = Hashtbl.create 101 in
   let add_to_hash hash bdd set new_set =
     (* useful function to add a set to a hashtbl in a hashtbl *)
@@ -414,8 +414,11 @@ let improved_consistency m m' width choice =
        let zero, one = split_zero_one new_bdds in
        bdd_of (generate_new_bdd a zero) (generate_new_bdd b one)
   in
-  compute_layer (Bddbddsset.singleton (m, Bddset.singleton m'));
-  generate_new_bdd m (Bddset.singleton m')
+  compute_layer (Bddbddsset.singleton (m, m'));
+  generate_new_bdd m m'
+
+let improved_consistency m m' width choice =
+  improved_consistency_multiple m (Bddset.singleton m') width choice
 
 
 let random_heuristic_improved_consistency bddbss =

@@ -12,6 +12,8 @@ rule token = parse    (* la "fonction" aussi s'appelle token *)
   | '('                       { LPAREN }
   | ')'                       { RPAREN }
 
+  | "ZERO"		      { ZERO }
+  | "NOT_ZERO"		      { NOTZERO }
   | "XOR"		      { XOR }
   | "SB" 		      { SB }
   | "MC" 		      { MC }
