@@ -131,6 +131,7 @@ let is_solution cstrlist cststore =
 
   
 let rec backtrack cstrlist store acc =
+  print_endline "backtrack";
   let propagated_store = List.fold_left (fun acc cstr -> propagate cstr acc) store cstrlist in
   match store_size propagated_store with
   | n when n = Strmap.cardinal propagated_store -> print_endline "one solution";print_endline (string_of_int (List.length acc + 1));

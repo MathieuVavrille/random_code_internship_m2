@@ -2,14 +2,14 @@ open Bdd
 open Useful
 open Cstrbdd
 open Crypto
-open Cstr_solver
+open Solver
 
    
 let _ = Random.init 0
 
 
 let main () = 
-  let in_file = open_in "examples/round5.txt" in
+  let in_file = open_in "examples/ex1round3.txt" in
   let lexbuf_file = Lexing.from_channel in_file in
   let parse () = Parser.main Lexer.token lexbuf_file in
   let cstrlist = parse () in
@@ -20,7 +20,7 @@ let main () =
 
 let _ = main ()
 
-(* let _ = print_string (generate_program 5)*)
+             (*let _ = print_string (generate_program 3)*)
 
 (* let _ =
   for i=252 to 255 do

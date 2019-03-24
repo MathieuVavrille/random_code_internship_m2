@@ -101,7 +101,7 @@ let add_zero_end =
                
 let gl_double m =
   match m with
-  | T | F -> failwith "lsl: the BDD is a leave"
+  | T | F -> raise (Empty_domain "lsl:the domain is empty")
   | N(a,b) -> union (add_zero_end a) (bdd_xor (add_zero_end b) (bdd_of_int 27 8 8))
 
 let gl_triple m =

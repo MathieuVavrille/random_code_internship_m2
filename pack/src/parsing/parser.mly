@@ -1,5 +1,5 @@
 %{
-open Cstr_solver
+open Solver
 %}
 
 /* description des lexèmes, ceux-ci sont décrits dans lexer.mll */
@@ -15,7 +15,7 @@ open Cstr_solver
 
 
 %start main
-%type <Cstr_solver.cstr list> main
+%type <Solver.cstr list> main
 %%
 
 main:

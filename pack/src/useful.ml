@@ -1,5 +1,7 @@
 open Bdd
 
+exception Empty_domain of string
+   
 (**********************************)
 (* Some useful string conversions *)
 
