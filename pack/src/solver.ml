@@ -9,6 +9,14 @@ type cstr = Xor of string * string * string
           | Zero of string
           | Not_zero of string
 
+let cstr_compare c1 c2 = match c1, c2 with
+  | Xor(a1,b1,c1), Xor(a2,b2,c2) -> list_compare String.compare [a1;b1;c1] [a2;b2;c2]
+  | Mc(a1,b1,c1,d1,e1,f1,g1,h1) | Mc(a2,b2,c2,d2,e2,f2,g2,h2) -> list_compare String.compare [a1;b1;c1;d1;e1;f1;g1;h1] [a2;b2;c2;d2;e2;f2;g2;h2]
+  | Sb(a1,b1), Sb(a2,b2) -> list_compare String.compare [a1;b1] [a2;b2]
+  | Zero(a1), Zero(a2) | Not_zero(a1), Not_zero(a2) -> String.compare a1 a2
+  | Xor _, _ | Mc _, _ -> 1
+  | _, Xor() | _, Mc _ -> -1
+
 let string_of_cstr c = match c with
   | Xor(a,b,c) -> "XOR("^a^","^b^","^c^")"
   | Mc(a,b,c,d,e,f,g,h) -> "MC("^a^","^b^","^c^","^d^","^e^","^f^","^g^","^h^")"
@@ -73,7 +81,14 @@ let propagate cstr store =
   | Sb(a,b) -> propagator_sb a b store
   | Zero(a) -> propagator_zero a store
   | Not_zero(a) -> propagator_not_zero a store
-             
+
+let vars_of_cstr cstr = match cstr with
+  | Xor(a,b,c) -> propagator_xor a b c store
+  | Mc(a,b,c,d,e,f,g,h) -> propagator_mc a b c d e f g h store
+  | Sb(a,b) -> propagator_sb a b store
+  | Zero(a) -> propagator_zero a store
+  | Not_zero(a) -> propagator_not_zero a store
+                 
 let init_domain cstrlist width =
   let complete = complete_bdd 8 in
   List.fold_left (fun acc cstr ->

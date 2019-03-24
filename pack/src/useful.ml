@@ -1,6 +1,4 @@
 open Bdd
-
-exception Empty_domain of string
    
 (**********************************)
 (* Some useful string conversions *)
@@ -67,6 +65,8 @@ module Bddbddsset = Set.Make(Orderedbddbddlist)
 
 module Strmap = Map.Make(String)
 
+module Strset = Set.Make(String)
+              
 module Intset = Set.Make(struct type t = int let compare = Pervasives.compare end)
               
 (* Functions to create or extract bdds *)
@@ -191,5 +191,14 @@ let dot_file m filename =
   let open Printf in
   let oc = open_out filename in
   fprintf oc "%s\n" !s;
-  close_out oc;
+  close_out oc
   
+  (* Some other useful functions *)
+
+let rec list_compare f l1 l2 = match l1, l2 with
+  | [], [] -> 0
+  | _, [] -> -1
+  | [], _ -> 1
+  | x::q, y::r -> match f x y with
+                  | 0 -> list_compare f q r
+                  | n -> n
