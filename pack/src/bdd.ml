@@ -19,6 +19,9 @@ let is_leaf m = match m with
   | T | F -> true
   | _ -> false
 
+let is_empty m =
+  m == F
+       
 (* Conversion function *)
 let rec string_of_bdd t = match t with
   | T -> "T"
@@ -135,7 +138,8 @@ let subset =
       Hashtbl.add subset_hash (ref m,ref m') res;
       res
   in aux
-   
+
+let equal m m' = bdd_compare m m' = 0
    
 (**********************)
 (* Bitwise operations *)   

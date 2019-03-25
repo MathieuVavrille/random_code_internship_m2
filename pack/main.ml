@@ -8,17 +8,17 @@ open Solver
 let _ = Random.init 0
 
 
-let main () = 
+let main width = 
   let in_file = open_in "examples/ex1round3.txt" in
   let lexbuf_file = Lexing.from_channel in_file in
   let parse () = Parser.main Lexer.token lexbuf_file in
-  let cstrlist = parse () in
+  let cstrset = parse () in
   close_in in_file;
-  (* print_endline (string_of_list string_of_cstr cstrlist); *)
-  let res = backtrack cstrlist (init_domain cstrlist 2) [] in
+  let complete_store, cstr_of_var = init_domain cstrset width in
+  let res = backtrack cstrset complete_store cstr_of_var [] in
   res
 
-let _ = main ()
+let _ = main 2
 
              (*let _ = print_string (generate_program 3)*)
 
