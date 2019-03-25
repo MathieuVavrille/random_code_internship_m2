@@ -55,7 +55,6 @@ let array_diff_sbox_outputs =
   done;
   res
   
-  
 let input_output_bdd output_fun =
   (* return a bdd where the values are \delta X \concat \delta Y *)
   let rec aux n set =
@@ -75,11 +74,51 @@ let input_output_sbox = input_output_bdd sbox
 let input_output_inverse_sbox = input_output_bdd inverse_sbox
 
                               
+let probaS a b =
+  (* Probability that inputing a in the differential s-box gives b *)
+  let count = ref (-8) in
+  for i=0 to 255 do
+    for j=i to 255 do
+      if i lxor j = a && sbox.(i) lxor sbox.(j) = b then incr count
+    done
+  done;
+    !count
+
+let input_output_sbox_proba = 
+  (* return a bdd where the values are \delta X \concat \delta Y *)
+  let rec aux n set =
+    let rec aux2 m set2 =
+      match m with
+      | -1 -> set2
+      | _ -> let res = (n lsl 8) lor m in
+             aux2 (m-1) (if probaS n m = -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
+    in
+    match n with
+    | -1 -> set
+    | _ -> aux (n-1) (aux2 255 set)
+  in
+  bdd_of_bitvectset (aux 255 Bvset.empty)
+  
+let input_output_inverse_sbox_proba = 
+  (* return a bdd where the values are \delta X \concat \delta Y *)
+  let rec aux n set =
+    let rec aux2 m set2 =
+      match m with
+      | -1 -> set2
+      | _ -> let res = (m lsl 8) lor n in
+             aux2 (m-1) (if probaS n m >= -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
+    in
+    match n with
+    | -1 -> set
+    | _ -> aux (n-1) (aux2 255 set)
+  in
+  bdd_of_bitvectset (aux 255 Bvset.empty)
+
 let possible_outputs m bdd_fun =
   let rec aux m current_bdd_fun acc = match m,current_bdd_fun with
     | T,_ -> Bddset.add current_bdd_fun acc
     | F,_ | _, F -> acc
-    | N(a,b), N(c,d) -> aux a c (aux b c acc)
+    | N(a,b), N(c,d) -> aux a c (aux b d acc)
     | N _, _ -> failwith "possible_outputs: the bdd_fun is not big enough"
   in
   aux m bdd_fun Bddset.empty

@@ -15,11 +15,20 @@ let main width =
   let cstrset = parse () in
   close_in in_file;
   let complete_store, cstr_of_var = init_domain cstrset width in
-  let res = backtrack cstrset complete_store cstr_of_var [] in
+  let res = backtrack cstrset complete_store cstr_of_var [] 0 None in
   res
 
-let _ = main 2
-
+let _ = main 3
+    
+(*let _ = let count = ref 0 in
+        for i=0 to 255 do
+          for j=0 to 255 do
+            match probaS i j with
+            | -6 -> print_endline (string_of_int i^" "^(string_of_int j)); incr count; print_endline (string_of_int !count);
+            | _ -> ()
+          done
+        done*)
+                
              (*let _ = print_string (generate_program 3)*)
 
 (* let _ =

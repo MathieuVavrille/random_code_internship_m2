@@ -228,16 +228,17 @@ let limited_bdd_of_bitvectset bls width heuristic =
   let replacement = Hashtbl.create 101 in
   let hash_split = Hashtbl.create 101 in
   let rec reduce layer =
-         match Bvsetset.cardinal layer > width with
-         | false -> layer
-         | true -> let s1, s2 = heuristic layer nb_paths_to in
-                   let s = Bvset.union s1 s2 in
-                   if Bvset.compare s s1 != 0 then (increase_value nb_paths_to s (Hashtbl.find nb_paths_to s1);
-                                                    Hashtbl.add replacement s1 s);
-                   if Bvset.compare s s2 != 0 then (increase_value nb_paths_to s (Hashtbl.find nb_paths_to s2);
-                                                    Hashtbl.add replacement s2 s);
-                   reduce (Bvsetset.add s (Bvsetset.remove s1 (Bvsetset.remove s2 layer)))
-       in
+    print_string "reduce";
+    match Bvsetset.cardinal layer > width with
+    | false -> layer
+    | true -> let s1, s2 = heuristic layer nb_paths_to in
+              let s = Bvset.union s1 s2 in
+              if Bvset.compare s s1 != 0 then (increase_value nb_paths_to s (Hashtbl.find nb_paths_to s1);
+                                               Hashtbl.add replacement s1 s);
+              if Bvset.compare s s2 != 0 then (increase_value nb_paths_to s (Hashtbl.find nb_paths_to s2);
+                                               Hashtbl.add replacement s2 s);
+              reduce (Bvsetset.add s (Bvsetset.remove s1 (Bvsetset.remove s2 layer)))
+  in
   let rec compute_layer blsset = match Bvsetset.is_empty blsset, Bvsetset.exists (fun x -> Bvset.exists (fun y -> y != []) x) blsset with
     | true, _ | _, false -> ()
     | _ ->
@@ -370,9 +371,17 @@ let improved_consistency_multiple m m' width choice =
     | false -> bddbsset
     | true -> let s1, s2 = choice bddbsset in
               if fst s1 != fst s2 then failwith "the choice returned two nodes that don't come from the same node";
+              print_endline "choice";
+              print_endline (string_of_int width);
               let merge_union = Bddset.union (snd s1) (snd s2) in
               add_to_hash replacement (fst s1) (snd s1) merge_union;
               add_to_hash replacement (fst s2) (snd s2) merge_union;
+              print_endline (string_of_bdd (fst s1));
+              print_endline (string_of_bdd (fst s2));
+              let r = Bddbddsset.add (fst s1, merge_union) (Bddbddsset.remove s1 (Bddbddsset.remove s2 bddbsset)) in
+              print_endline "after";
+              print_endline (string_of_int (Bddbddsset.cardinal r));
+              
               reduce (Bddbddsset.add (fst s1, merge_union) (Bddbddsset.remove s1 (Bddbddsset.remove s2 bddbsset)))
   in
   let rec compute_layer bddbss =
@@ -414,10 +423,14 @@ let improved_consistency_multiple m m' width choice =
        let zero, one = split_zero_one new_bdds in
        bdd_of (generate_new_bdd a zero) (generate_new_bdd b one)
   in
+  print_endline "improved";
   compute_layer (Bddbddsset.singleton (m, m'));
+  print_endline "passed";
   generate_new_bdd m m'
 
 let improved_consistency m m' width choice =
+  dot_file m "output/bug1.dot";
+  dot_file m' "output/bug2.dot";
   improved_consistency_multiple m (Bddset.singleton m') width choice
 
 
