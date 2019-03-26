@@ -18,7 +18,13 @@ let main width =
   let res = backtrack cstrset complete_store cstr_of_var [] 0 None in
   res
 
-let _ = main 3
+(*let _ = main 3*)
+
+let _ = save_to_file (complete_bdd 8) "output/complete_save.txt"
+  
+let res = get_from_file "output/complete_save.txt"
+
+let _ = print_endline (string_of_int (width res)); print_endline (string_of_int (cardinal res))
     
 (*let _ = let count = ref 0 in
         for i=0 to 255 do
@@ -29,7 +35,7 @@ let _ = main 3
           done
         done*)
                 
-             (*let _ = print_string (generate_program 3)*)
+             (*             let _ = print_string (generate_program 3)*)
 
 (* let _ =
   for i=252 to 255 do

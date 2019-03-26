@@ -52,6 +52,7 @@ let cardinal m = snd (depth_card m)
 let array_width m =
   (* Give the width of each layer of a bdd in an array*)
   let visited = Hashtbl.create 101 in
+  Hashtbl.add visited (ref F) ();
   (* At the index d there is the width of the depth d *)
   let widths = Array.make (depth m + 1) 0 in
   let rec aux m =
@@ -207,3 +208,6 @@ let bdd_xor =
   in aux
 
 
+
+
+       

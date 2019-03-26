@@ -82,7 +82,9 @@ let propagator_psb a b store =
   let bdda,wa = Strmap.find a store in
   let bddb,wb = Strmap.find b store in
   let res_b = improved_consistency_multiple bddb (possible_outputs bdda input_output_sbox_proba) wb random_heuristic_improved_consistency in
+  if width res_b > wb then (print_endline (string_of_bddset (possible_outputs bdda input_output_sbox_proba)); print_endline (string_of_bdd bddb);failwith "bug b");
   let res_a = improved_consistency_multiple bdda (possible_outputs bddb input_output_inverse_sbox_proba) wa random_heuristic_improved_consistency in
+  if width res_b > wa then failwith "bug a";
   Strmap.add a (res_a,wa) (Strmap.add b (res_b,wb) store), get_modified [a;b] [bdda;bddb] [res_a;res_b]
 
 let propagator_zero =
@@ -123,11 +125,9 @@ let rec full_propagation cstrset store cstr_of_var =
   | true -> store
   | false -> let cstr = Cstrset.choose cstrset in
              let new_store, modified_vars = propagate cstr store in
-             print_endline "out";
-             (*print_endline (string_of_cstr cstr);
+             print_endline (string_of_cstr cstr);
              Strmap.iter (fun key (elt,w) -> let previous = fst (Strmap.find key store) in
-                                         if elt != previous then print_endline (key^" previous: "^(string_of_int (cardinal previous)^" new: "^(string_of_int (cardinal elt))))) new_store;*)
-             if Strmap.cardinal new_store <> Strmap.cardinal store then print_endline (string_of_cstr cstr);
+                                         if elt != previous then print_endline (key^" previous: "^(string_of_int (cardinal previous)^" new: "^(string_of_int (cardinal elt))))) new_store;
              if List.exists (fun elt -> is_empty (fst (Strmap.find elt new_store))) modified_vars then Strmap.empty else full_propagation (Cstrset.remove cstr (List.fold_left (fun acc elt -> Cstrset.union acc (Strmap.find elt cstr_of_var)) cstrset modified_vars)) new_store cstr_of_var
 
 
@@ -198,18 +198,21 @@ let is_solution cstrset cststore =
   Cstrset.fold (fun cstr (b_acc, prob_acc) -> if b_acc then let b, prob = is_solution_cstr cstr cststore in b, prob + prob_acc else b_acc, 0) cstrset (true, 0)
   
 let rec backtrack cstrset store cstr_of_var acc depth modified_var =
+  print_endline (string_of_int (store_size store));
   print_endline ("backtrack"^(string_of_int depth));
   let propagated_store = full_propagation 
                            (match modified_var with
                             | Some a -> (Strmap.find a cstr_of_var)
                             | None -> cstrset)
                            store cstr_of_var in
-  print_endline "passed";
+  print_endline (string_of_int (store_size propagated_store));
+  Strmap.iter (fun key (elt,w) -> if cardinal elt = 1 && subset (bdd_of_int 0 8 8) elt then print_endline key) propagated_store;
+  failwith "test";
   match Strmap.is_empty propagated_store, store_size propagated_store with
   | true, _ -> acc
   | _, n when n = Strmap.cardinal propagated_store -> let cststore = Strmap.fold (fun key (bdd,w) acc -> Strmap.add key (int_of_bdd bdd) acc) propagated_store Strmap.empty in
                                                       let is_sol, prob = is_solution cstrset cststore in
-                                                      if is_sol then (print_endline ("one_solution"^(string_of_int (List.length acc + 1))); print_endline ("proba = "^(string_of_int prob));(cststore, prob)::acc) else acc
+                                                      if is_sol then (print_endline ("one_solution"^(string_of_int (List.length acc + 1))); print_endline ("proba = "^(string_of_int prob));failwith "solution";(cststore, prob)::acc) else acc
   | _ -> let split_stores, split_var = split_store propagated_store in
      List.fold_left (fun new_acc backtrack_store -> backtrack cstrset backtrack_store cstr_of_var new_acc (depth+1) (Some split_var)) acc split_stores
      

@@ -69,9 +69,17 @@ let input_output_bdd output_fun =
   in
   bdd_of_bitvectset (aux 255 Bvset.empty)
 
-let input_output_sbox = input_output_bdd sbox
+let input_output_sbox =
+  try get_from_file "src/saved_bdd/input_output_sbox.bdd"
+  with _ -> let res = input_output_bdd sbox in
+            save_to_file res "src/saved_bdd/input_output_sbox.bdd";
+            res
 
-let input_output_inverse_sbox = input_output_bdd inverse_sbox
+let input_output_inverse_sbox = 
+  try get_from_file "src/input_output_inverse_sbox.bdd"
+  with _ -> let res = input_output_bdd inverse_sbox in
+            save_to_file res "src/saved_bdd/input_output_inverse_sbox.bdd";
+            res
 
                               
 let probaS a b =
@@ -84,40 +92,48 @@ let probaS a b =
   done;
     !count
 
-let input_output_sbox_proba = 
-  (* return a bdd where the values are \delta X \concat \delta Y *)
-  let rec aux n set =
-    let rec aux2 m set2 =
-      match m with
-      | -1 -> set2
-      | _ -> let res = (n lsl 8) lor m in
-             aux2 (m-1) (if probaS n m = -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
-    in
-    match n with
-    | -1 -> set
-    | _ -> aux (n-1) (aux2 255 set)
-  in
-  bdd_of_bitvectset (aux 255 Bvset.empty)
+let input_output_sbox_proba =
+  try get_from_file "src/saved_bdd/input_output_sbox_proba.bdd"
+  with _ -> let res =
+              (* return a bdd where the values are \delta X \concat \delta Y *)
+              let rec aux n set =
+                let rec aux2 m set2 =
+                  match m with
+                  | -1 -> set2
+                  | _ -> let res = (n lsl 8) lor m in
+                         aux2 (m-1) (if probaS n m = -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
+                in
+                match n with
+                | -1 -> set
+                | _ -> aux (n-1) (aux2 255 set)
+              in
+              bdd_of_bitvectset (aux 255 Bvset.empty) in
+            save_to_file res "src/saved_bdd/input_output_sbox_proba.bdd";
+            res
   
 let input_output_inverse_sbox_proba = 
-  (* return a bdd where the values are \delta X \concat \delta Y *)
-  let rec aux n set =
-    let rec aux2 m set2 =
-      match m with
-      | -1 -> set2
-      | _ -> let res = (m lsl 8) lor n in
-             aux2 (m-1) (if probaS n m >= -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
-    in
-    match n with
-    | -1 -> set
-    | _ -> aux (n-1) (aux2 255 set)
-  in
-  bdd_of_bitvectset (aux 255 Bvset.empty)
+  try get_from_file "src/saved_bdd/input_output_inverse_sbox_proba.bdd"
+  with _ -> let res =
+              (* return a bdd where the values are \delta X \concat \delta Y *)
+              let rec aux n set =
+                let rec aux2 m set2 =
+                  match m with
+                  | -1 -> set2
+                  | _ -> let res = (m lsl 8) lor n in
+                         aux2 (m-1) (if probaS n m >= -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
+                in
+                match n with
+                | -1 -> set
+                | _ -> aux (n-1) (aux2 255 set)
+              in
+              bdd_of_bitvectset (aux 255 Bvset.empty) in
+            save_to_file res "src/saved_bdd/input_output_inverse_sbox_proba.bdd";
+            res
 
 let possible_outputs m bdd_fun =
   let rec aux m current_bdd_fun acc = match m,current_bdd_fun with
-    | T,_ -> Bddset.add current_bdd_fun acc
     | F,_ | _, F -> acc
+    | T, _ -> Bddset.add current_bdd_fun acc
     | N(a,b), N(c,d) -> aux a c (aux b d acc)
     | N _, _ -> failwith "possible_outputs: the bdd_fun is not big enough"
   in
@@ -197,14 +213,14 @@ let generate_program r =
   let s = ref "" in
   for j=0 to 3 do
     for k=0 to 3 do
-      s := !s^"XOR(xinit_"^(string_of_int j)^"_"^(string_of_int k)^", k_"^(underscores 0 j k)^", x"^(underscores 0 j k)^");\n"
+      s := !s^"XOR(xinit_"^(string_of_int j)^"_"^(string_of_int k)^", k_"^(underscores 0 j k)^", x_"^(underscores 0 j k)^");\n"
     done
   done;
   for i= 0 to r-1 do
     if i <> 0 then (* On first round the bytes of X are computed from the input *)
         for j=0 to 3 do
           for k=0 to 3 do
-            s := !s^"XOR(z_"^(underscores (i-1) j k)^", k_"^(underscores i j k)^", x"^(underscores i j k)^");\n"
+            s := !s^"XOR(z_"^(underscores (i-1) j k)^", k_"^(underscores i j k)^", x_"^(underscores i j k)^");\n"
           done
         done;
     for j=0 to 3 do
@@ -214,7 +230,7 @@ let generate_program r =
     done;
     if i <> r-1 then (* No MC on last round *)
       for k=0 to 3 do
-        s := !s^"MC(sx_"^(underscores i 0 k)^", sx_"^(underscores i 1 ((k+1) mod 4))^", sx_"^(underscores i 2 ((k+2) mod 4))^", sx_"^(underscores i 3 ((k+3) mod 4))^", z_"^(underscores i 0 k)^", z_"^(underscores i 1 k)^", z_"^(underscores i 2 k)^", z_"^(underscores i 3 k)^");\n"
+        s := !s^"MC(sx_"^(underscores i 0 k)^", sx_"^(underscores i 1 ((k+3) mod 4))^", sx_"^(underscores i 2 ((k+2) mod 4))^", sx_"^(underscores i 3 ((k+1) mod 4))^", z_"^(underscores i 0 k)^", z_"^(underscores i 1 k)^", z_"^(underscores i 2 k)^", z_"^(underscores i 3 k)^");\n" (* In this step, we use the values shifted on the right, so to get them we need to look on the left *)
       done;
     for j=0 to 3 do
       s := !s^"SB(k_"^(underscores i j 3)^", sk_"^(underscores i j 3)^");\n";

@@ -68,6 +68,8 @@ module Strmap = Map.Make(String)
 module Strset = Set.Make(String)
               
 module Intset = Set.Make(struct type t = int let compare = Pervasives.compare end)
+
+module Intmap = Map.Make(struct type t = int let compare = Pervasives.compare end)
               
 (* Functions to create or extract bdds *)
                
@@ -192,6 +194,46 @@ let dot_file m filename =
   let oc = open_out filename in
   fprintf oc "%s\n" !s;
   close_out oc
+
+let save_to_file m filename =
+  let counter = let x = ref 1 in fun () -> incr x; !x in
+  let index = Hashtbl.create 101 in
+  Hashtbl.add index (ref T) 0;
+  Hashtbl.add index (ref F) 1;
+  let s = ref "" in
+  let rec aux m =
+    try Hashtbl.find index (ref m)
+    with Not_found ->
+          match m with
+          | T -> 0
+          | F -> 1
+          | N(a,b) ->
+             let current_count = counter () in
+             Hashtbl.add index (ref m) current_count;
+             let ai, bi = aux a, aux b in
+             s := !s^(string_of_int current_count)^":"^(string_of_int ai)^","^(string_of_int bi)^";";
+             current_count
+  in
+  let _ = aux m in
+  let open Printf in
+  let oc = open_out filename in
+  fprintf oc "%s" !s;
+  close_out oc
+
+let get_from_file filename =
+  let ic = open_in filename in
+  let text = input_line ic in
+  close_in ic;
+  let full_map = List.fold_left (fun acc elt -> if elt = "" then acc else begin
+                                     match String.split_on_char ':' elt with
+                                     | x::[y] -> let a,b = match String.split_on_char ',' y with
+                                                   | astr::[bstr] -> Strmap.find astr acc, Strmap.find bstr acc
+                                                   | _ -> failwith "second error on the file"
+                                                 in
+                                                 Strmap.add x (bdd_of a b) acc
+                                     | _ -> failwith "error on the file"
+                                                  end ) (Strmap.add "0" T (Strmap.singleton "1" F)) (String.split_on_char ';' text) in
+  Strmap.find "2" full_map
   
   (* Some other useful functions *)
 

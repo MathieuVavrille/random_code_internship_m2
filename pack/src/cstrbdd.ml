@@ -114,7 +114,7 @@ let split_backtrack_optimal_next_width m =
   for i = 1 to depth m do
     let (b1,b2) = zero_one_at_depth.(i) in
     let nb_merged = 2*a_width.(i) - (Bddset.cardinal b1) - (Bddset.cardinal b2) in
-    print_endline ("nb_m "^(string_of_int nb_merged)^" i = "^(string_of_int i)^" ");
+    (*print_endline ("nb_m "^(string_of_int nb_merged)^" i = "^(string_of_int i)^" ");*)
     if !max_val <= nb_merged && (not (Bddset.is_empty b1)) && (not (Bddset.is_empty b2))
     then (max_val := nb_merged; max_depth := i)
   done;
@@ -228,7 +228,6 @@ let limited_bdd_of_bitvectset bls width heuristic =
   let replacement = Hashtbl.create 101 in
   let hash_split = Hashtbl.create 101 in
   let rec reduce layer =
-    print_string "reduce";
     match Bvsetset.cardinal layer > width with
     | false -> layer
     | true -> let s1, s2 = heuristic layer nb_paths_to in
@@ -347,6 +346,7 @@ let rec inter_with_union bdd bdds =
 
      
 let improved_consistency_multiple m m' width choice =
+  dot_file m "output/bug1.dot";
   let replacement = Hashtbl.create 101 in
   let add_to_hash hash bdd set new_set =
     (* useful function to add a set to a hashtbl in a hashtbl *)
@@ -371,17 +371,11 @@ let improved_consistency_multiple m m' width choice =
     | false -> bddbsset
     | true -> let s1, s2 = choice bddbsset in
               if fst s1 != fst s2 then failwith "the choice returned two nodes that don't come from the same node";
-              print_endline "choice";
-              print_endline (string_of_int width);
+              (*print_endline "choice";
+              print_endline (string_of_int width);*)
               let merge_union = Bddset.union (snd s1) (snd s2) in
               add_to_hash replacement (fst s1) (snd s1) merge_union;
-              add_to_hash replacement (fst s2) (snd s2) merge_union;
-              print_endline (string_of_bdd (fst s1));
-              print_endline (string_of_bdd (fst s2));
-              let r = Bddbddsset.add (fst s1, merge_union) (Bddbddsset.remove s1 (Bddbddsset.remove s2 bddbsset)) in
-              print_endline "after";
-              print_endline (string_of_int (Bddbddsset.cardinal r));
-              
+              add_to_hash replacement (fst s2) (snd s2) merge_union;              
               reduce (Bddbddsset.add (fst s1, merge_union) (Bddbddsset.remove s1 (Bddbddsset.remove s2 bddbsset)))
   in
   let rec compute_layer bddbss =
@@ -406,7 +400,8 @@ let improved_consistency_multiple m m' width choice =
   let rec replace_chain_set (bdd, bdds) =
     (* Find the new bdd to use (aux function) *)
     try let bdd_map = Hashtbl.find replacement (ref bdd) in
-        try (bdd, Bddsmap.find bdds bdd_map)
+        try let res = (bdd, Bddsmap.find bdds bdd_map) in
+            if Bddset.compare (snd res) bdds = 0 then (bdd, bdds) else replace_chain_set res
         with Not_found -> (bdd, bdds)
     with Not_found -> (bdd, bdds)
   in
@@ -423,9 +418,9 @@ let improved_consistency_multiple m m' width choice =
        let zero, one = split_zero_one new_bdds in
        bdd_of (generate_new_bdd a zero) (generate_new_bdd b one)
   in
-  print_endline "improved";
+  (*print_endline "improved";*)
   compute_layer (Bddbddsset.singleton (m, m'));
-  print_endline "passed";
+  (*print_endline "passed";*)
   generate_new_bdd m m'
 
 let improved_consistency m m' width choice =
@@ -435,8 +430,10 @@ let improved_consistency m m' width choice =
 
 
 let random_heuristic_improved_consistency bddbss =
+  (*print_endline "heuristic";*)
   let bdd_exists = Hashtbl.create 101 in
   Bddbddsset.fold (fun (bdd, bdds) ((bddacc, bddsacc), acc) ->
+      (*print_endline (string_of_bdd bdd);*)
       match Bddset.is_empty bddsacc with
       | false -> (bddacc, bddsacc), acc
       | true -> try (bdd,Hashtbl.find bdd_exists (ref bdd)), (bdd, bdds)
