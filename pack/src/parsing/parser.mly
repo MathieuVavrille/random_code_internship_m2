@@ -1,5 +1,8 @@
 %{
-open Solver
+    open Solver
+    open Useful
+    let sbox_active = ref []
+    let sbox_inactive = ref Strset.empty
 %}
 
 /* description des lexèmes, ceux-ci sont décrits dans lexer.mll */
@@ -15,15 +18,21 @@ open Solver
 
 
 %start main
-%type <Solver.Cstrset.t> main
+%type <Solver.Cstrset.t * string list> main
 %%
 
 main:
-  | END               { Cstrset.empty }  /* on veut reconnaître un "instr" */
-  | XOR LPAREN VAR COMMA VAR COMMA VAR RPAREN SEMIC main { Cstrset.add (Xor($3, $5, $7)) $10 }
-  | MC LPAREN VAR COMMA VAR COMMA VAR COMMA VAR COMMA VAR COMMA VAR COMMA VAR COMMA VAR RPAREN SEMIC main { Cstrset.add (Mc($3, $5, $7, $9, $11, $13, $15, $17)) $20 }
-  | SB LPAREN VAR COMMA VAR RPAREN SEMIC main { Cstrset.add (Sb($3, $5)) $8 }
-  | PSB LPAREN VAR COMMA VAR RPAREN SEMIC main { Cstrset.add (Psb($3, $5)) $8 }
-  | ZERO LPAREN VAR RPAREN SEMIC main { Cstrset.add (Zero($3)) $6 }
-  | NOTZERO LPAREN VAR RPAREN SEMIC main { Cstrset.add (Not_zero($3)) $6 }
+  | cstr           { let cstrset = $1 in
+		     let active_sbox_list = List.fold_left (fun acc (x,y) -> if Strset.mem x !sbox_inactive then acc else (x,y)::acc) [] !sbox_active in
+		     let cstr_bound = ref (-7 * List.length active_sbox_list) in
+		     Cstrset.add (ActiveSB(active_sbox_list, cstr_bound)) cstrset, List.rev (List.fold_left (fun acc (a,b) -> a::b::acc) [] !sbox_active) }
+
+cstr:
+  | END            { Cstrset.empty }
+  | XOR LPAREN VAR COMMA VAR COMMA VAR RPAREN SEMIC cstr { Cstrset.add (Xor($3, $5, $7)) $10 }
+  | MC LPAREN VAR COMMA VAR COMMA VAR COMMA VAR COMMA VAR COMMA VAR COMMA VAR COMMA VAR RPAREN SEMIC cstr { Cstrset.add (Mc($3, $5, $7, $9, $11, $13, $15, $17)) $20 }
+  | SB LPAREN VAR COMMA VAR RPAREN SEMIC cstr { if not (Strset.mem $3 !sbox_inactive) then (sbox_active := ($3, $5)::(!sbox_active);$8) else Cstrset.add (Sb($3, $5)) $8 }
+  | PSB LPAREN VAR COMMA VAR RPAREN SEMIC cstr { Cstrset.add (Psb($3, $5)) $8 }
+  | ZERO LPAREN VAR RPAREN SEMIC cstr { sbox_inactive := Strset.add $3 !sbox_inactive;Cstrset.add (Zero($3)) $6 }
+  | NOTZERO LPAREN VAR RPAREN SEMIC cstr { Cstrset.add (Not_zero($3)) $6 }
 ;
