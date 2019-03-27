@@ -6,7 +6,7 @@ open Cstrbdd
 type cstr = Xor of string * string * string
           | Mc of  string * string * string * string * string * string * string * string
           | Sb of  string * string
-          | Psb of  string * string
+          | Psb of  string * string (* TODO remove *)
           | Zero of string
           | Not_zero of string
           | ActiveSB of (string * string) list * int ref
