@@ -17,12 +17,13 @@ rule token = parse    (* la "fonction" aussi s'appelle token *)
   | "XOR"		      { XOR }
   | "SB" 		      { SB }
   | "MC" 		      { MC }
-  | "PSB" 		      { PSB }
+  | "CST" 		      { CST }
 
-  | (['a'-'z' '_']['a'-'z' 'A'-'Z' '_' '0'-'9']* as s) {VAR (s) }
-  | [' ' '\t' '\n']           { token lexbuf }  
-  | "(*" ('*'[^')'] | [^'*'])* '*'? "*)"       { token lexbuf }  (* Comments *)
-  | eof                       { EOF } 
+  | (['a'-'z' '_']['a'-'z' 'A'-'Z' '_' '0'-'9']* as s) { VAR (s) }
+  | (['0'-'9']* as s) 	   	       		       { INT (int_of_string s) }
+  | [' ' '\t' '\n']           			       { token lexbuf }  
+  | "(*" ('*'[^')'] | [^'*'])* '*'? "*)"       	       { token lexbuf }  (* Comments *)
+  | eof                        	    		       { EOF } 
 
 
 

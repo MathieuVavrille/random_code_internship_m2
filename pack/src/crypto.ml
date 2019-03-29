@@ -2,7 +2,7 @@ open Useful
 open Bdd
    
 let sbox_hex =
-  [|[| "6A"; "7C"; "77";"7B";"F2";"6B";"6F";"C5";"30";"01";"67";"2B";"FE";"D7";"AB";"76"|];
+  [|[| "63"; "7C"; "77";"7B";"F2";"6B";"6F";"C5";"30";"01";"67";"2B";"FE";"D7";"AB";"76"|];
     [| "CA"; "82"; "C9";"7D";"FA";"59";"47";"F0";"AD";"D4";"A2";"AF";"9C";"A4";"72";"C0"|];
     [| "B7";"FD";"93";"26";"36";"3F";"F7";"CC";"34";"A5";"E5";"F1";"71";"D8";"31";"15"|];
     [| "04";"C7";"23";"C3";"18";"96";"05";"9A";"07";"12";"80";"E2";"EB";"27";"B2";"75"|];
@@ -10,7 +10,7 @@ let sbox_hex =
     [| "53";"D1";"00";"ED";"20";"FC";"B1";"5B";"6A";"CB";"BE";"39";"4A";"4C";"58";"CF"|];
     [| "D0";"EF";"AA";"FB";"43";"4D";"33";"85";"45";"F9";"02";"7F";"50";"3C";"9F";"A8"|];
     [| "51";"A3";"40";"8F";"92";"9D";"38";"F5";"BC";"B6";"DA";"21";"10";"FF";"F3";"D2"|];
-    [| "CD";"0C";"13";"EC";"5F";"97";"44";"17";"C4";"A7";"73";"3D";"64";"5D";"19";"73"|];
+    [| "CD";"0C";"13";"EC";"5F";"97";"44";"17";"C4";"A7";"7E";"3D";"64";"5D";"19";"73"|];
     [| "60";"81";"4F";"DC";"22";"2A";"90";"88";"46";"EE";"B8";"14";"DE";"5E";"0B";"DB"|];
     [| "E0";"32";"3A";"0A";"49";"06";"24";"5C";"C2";"D3";"AC";"62";"91";"95";"E4";"79"|];
     [| "E7";"C8";"37";"6D";"8D";"D5";"4E";"A9";"6C";"56";"F4";"EA";"65";"7A";"AE";"08"|];
@@ -19,6 +19,23 @@ let sbox_hex =
     [| "E1";"F8";"98";"11";"69";"D9";"8E";"94";"9B";"1E";"87";"E9";"CE";"55";"28";"DF"|];
     [| "8C";"A1";"89";"0D";"BF";"E6";"42";"68";"41";"99";"2D";"0F";"B0";"54";"BB";"16"|]|]
 
+let test = [|[|99; 124; 119; 123; 242; 107; 111; 197;  48;   1; 103;  43; 254; 215; 171; 118|]; 
+	     [|202; 130; 201; 125; 250;  89;  71; 240; 173; 212; 162; 175; 156; 164; 114; 192|];
+	     [|183; 253; 147;  38;  54;  63; 247; 204;  52; 165; 229; 241; 113; 216;  49;  21|]; 
+	     [|4; 199;  35; 195;  24; 150;   5; 154;   7;  18; 128; 226; 235;  39; 178; 117|]; 
+	     [|9; 131;  44;  26;  27; 110;  90; 160;  82;  59; 214; 179;  41; 227;  47; 132|]; 
+	     [|83; 209;   0; 237;  32; 252; 177;  91; 106; 203; 190;  57;  74;  76;  88; 207|]; 
+	     [|208; 239; 170; 251;  67;  77;  51; 133;  69; 249;   2; 127;  80;  60; 159; 168|]; 
+	     [|81; 163;  64; 143; 146; 157;  56; 245; 188; 182; 218;  33;  16; 255; 243; 210|]; 
+	     [|205;  12;  19; 236;  95; 151;  68;  23; 196; 167; 126;  61; 100;  93;  25; 115|]; 
+	     [|96; 129;  79; 220;  34;  42; 144; 136;  70; 238; 184;  20; 222;  94;  11; 219|]; 
+	     [|224;  50;  58;  10;  73;   6;  36;  92; 194; 211; 172;  98; 145; 149; 228; 121|]; 
+	     [|231; 200;  55; 109; 141; 213;  78; 169; 108;  86; 244; 234; 101; 122; 174;   8|]; 
+	     [|186; 120;  37;  46;  28; 166; 180; 198; 232; 221; 116;  31;  75; 189; 139; 138|]; 
+	     [|112;  62; 181; 102;  72;   3; 246;  14;  97;  53;  87; 185; 134; 193;  29; 158|]; 
+	     [|225; 248; 152;  17; 105; 217; 142; 148; 155;  30; 135; 233; 206;  85;  40; 223|]; 
+	     [|140; 161; 137;  13; 191; 230;  66; 104;  65; 153;  45;  15; 176;  84; 187;  22|]|]
+         
 module Chmap = Map.Make(Char)
              
 let int_of_hex =
@@ -34,7 +51,7 @@ let int_of_hexstring s =
     res := try Chmap.find s.[i] int_of_hex + 16 * !res with Not_found -> print_string (Char.escaped s.[i]); failwith "test";
   done;
   !res
-
+  
 let sbox =
   Array.init 256 (fun i -> int_of_hexstring sbox_hex.(i lsr 4).(i land 15))
   
@@ -84,13 +101,11 @@ let input_output_inverse_sbox =
                               
 let probaS a b =
   (* Probability that inputing a in the differential s-box gives b *)
-  let count = ref (-8) in
+  let count = ref (-16) in
   for i=0 to 255 do
-    for j=i to 255 do
-      if i lxor j = a && sbox.(i) lxor sbox.(j) = b then incr count
-    done
+      if sbox.(i) lxor sbox.(i lxor a) = b then incr count
   done;
-    !count
+    !count/2
 
 let input_output_sbox_proba =
   try get_from_file "src/saved_bdd/input_output_sbox_proba.bdd"
@@ -197,7 +212,7 @@ let inverse_mix_column_bdd y0 y1 y2 y3 =
   bdd_xor (gl_fourteen powers_array.(3)) (bdd_xor (gl_eleven powers_array.(0)) (bdd_xor (gl_thirteen powers_array.(1)) (gl_nine powers_array.(2))))
 
 let gl_double_int x =
-  if x land 128 = 0 then x lsl 1 else (x lsl 1) lxor 27
+  if x land 128 = 0 then (x lsl 1) land 255 else ((x lsl 1) land 255) lxor 27
 
 let gl_triple_int x =
   gl_double_int x lxor x
@@ -230,7 +245,7 @@ let generate_program r =
     done;
     if i <> r-1 then (* No MC on last round *)
       for k=0 to 3 do
-        s := !s^"MC(sx_"^(underscores i 0 k)^", sx_"^(underscores i 1 ((k+3) mod 4))^", sx_"^(underscores i 2 ((k+2) mod 4))^", sx_"^(underscores i 3 ((k+1) mod 4))^", z_"^(underscores i 0 k)^", z_"^(underscores i 1 k)^", z_"^(underscores i 2 k)^", z_"^(underscores i 3 k)^");\n" (* In this step, we use the values shifted on the right, so to get them we need to look on the left *)
+        s := !s^"MC(sx_"^(underscores i 0 k)^", sx_"^(underscores i 1 ((k+1) mod 4))^", sx_"^(underscores i 2 ((k+2) mod 4))^", sx_"^(underscores i 3 ((k+3) mod 4))^", z_"^(underscores i 0 k)^", z_"^(underscores i 1 k)^", z_"^(underscores i 2 k)^", z_"^(underscores i 3 k)^");\n" (* In this step, we use the values shifted on the right, so to get them we need to look on the left *)
       done;
     for j=0 to 3 do
       s := !s^"SB(k_"^(underscores i j 3)^", sk_"^(underscores i j 3)^");\n";
