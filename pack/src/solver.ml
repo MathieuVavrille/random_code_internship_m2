@@ -185,8 +185,7 @@ let store_size store =
 
 let split_store store sbox_vars =
   let chosen_sbox_var = "" in (*List.fold_left (fun acc elt -> if acc = "" then if cardinal (fst (Strmap.find elt store)) > 1  then elt else acc else acc) "" sbox_vars in*)
-  (*let (_,chosen_key) = if chosen_sbox_var = "" then Strmap.fold (fun k (v,w) (card,key) -> if cardinal v > card then (cardinal v,k) else (card,key)) store (0,"") else (0, chosen_sbox_var) in*)
-  let chosen_key = Strmap.fold (fun k (v,w) key -> if key = "" && cardinal v > 1 then k else key) store "" in
+  let (_,chosen_key) = if chosen_sbox_var = "" then Strmap.fold (fun k (v,w) (card,key) -> if cardinal v > card then (cardinal v,k) else (card,key)) store (0,"") else (0, chosen_sbox_var) in
   let (chosen_bdd,chosen_width) = Strmap.find chosen_key store in
   let (bdd1,bdd2) = split_backtrack_first chosen_bdd in
   [ Strmap.add chosen_key (bdd1,chosen_width) store; Strmap.add chosen_key (bdd2,chosen_width) store], chosen_key
@@ -239,13 +238,13 @@ let is_solution cstrset cststore =
   Cstrset.fold (fun cstr (b_acc, prob_acc) -> if b_acc then (let b, prob = is_solution_cstr cstr cststore in if not b then print_endline (string_of_cstr cstr);b, prob + prob_acc) else b_acc, 0) cstrset (true, 0)
   
 let rec backtrack cstrset store acc depth modified_var (cstr_of_var, sbox_vars, cstr_bound) =
-  if depth < 1000 then print_endline ("backtrack"^(string_of_int depth));
+  if depth < 10 then print_endline ("backtrack"^(string_of_int depth));
   let propagated_store = full_propagation 
                            (match modified_var with
                             | Some a -> (Strmap.find a cstr_of_var)
                             | None -> cstrset)
                            store cstr_of_var in
-  Strmap.iter (fun k (elt,w) -> if cardinal elt > 1 then print_endline k) propagated_store;
+  (* Strmap.iter (fun k (elt,w) -> if cardinal elt > 1 then (print_endline k;print_endline (string_of_int (cardinal elt)))) propagated_store;*)
   match Strmap.is_empty propagated_store, store_size propagated_store with
   | true, _ -> acc
   | _, n when n = Strmap.cardinal propagated_store -> let cststore = Strmap.fold (fun key (bdd,w) acc -> Strmap.add key (int_of_bdd bdd) acc) propagated_store Strmap.empty in
