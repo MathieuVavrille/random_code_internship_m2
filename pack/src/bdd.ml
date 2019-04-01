@@ -1,3 +1,5 @@
+module B = Big_int_Z
+
 (* BDDs are trees and nodes have a 0-edge (first of the couple) and a 1-edge (second element of the couple) *)
 type bdd = T | F | N of bdd * bdd
                       
@@ -27,18 +29,21 @@ let rec string_of_bdd t = match t with
   | T -> "T"
   | F -> "F"
   | N(a,b) -> "N("^(string_of_bdd a)^","^(string_of_bdd b)^")"
-       
+
+
+  module T = Big_int_Z
+            
 let depth_card  =
-  (* Returns the depth of the bdd and the cardinality of the set it represents (bounded by max_int, bigger than this will return max_int *) 
+  (* Returns the depth of the bdd and the cardinality of the set it represents (bounded by max_int, bigger than this will return max_int *)
   let data = Hashtbl.create 101 in
   let rec aux m =
     try Hashtbl.find data (ref m)
     with Not_found ->
       let res = match m with
-        | T -> (0,1)
-        | F -> (0,0)
+        | T -> (0,B.unit_big_int)
+        | F -> (0,B.zero_big_int)
         | N(a,b) -> let (d1,c1),(d2,c2) = aux a, aux b in
-                    (max d1 d2+1, let sum = c1 + c2 in if sum < 0 then max_int else sum)
+                    (max d1 d2+1, B.add_big_int c1 c2)
       in
       Hashtbl.add data (ref m) res;
       res

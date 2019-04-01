@@ -2,7 +2,8 @@ open Crypto
 open Useful
 open Bdd
 open Cstrbdd
-   
+
+(* The constraint type: all the active S-boxes are represented in Active SB (the other ones are equal to zero) *)
 type cstr = Xor of string * string * string
           | Mc of  string * string * string * string * string * string * string * string
           | Zero of string
@@ -11,6 +12,7 @@ type cstr = Xor of string * string * string
           | Iscst of string * int
 
 let cstr_compare c1 c2 = match c1, c2 with
+  (* When the constraint have the same type, we compare the arguments *)
   | Xor(a1,b1,c1), Xor(a2,b2,c2) -> list_compare String.compare [a1;b1;c1] [a2;b2;c2]
   | Mc(a1,b1,c1,d1,e1,f1,g1,h1) , Mc(a2,b2,c2,d2,e2,f2,g2,h2) -> list_compare String.compare [a1;b1;c1;d1;e1;f1;g1;h1] [a2;b2;c2;d2;e2;f2;g2;h2]
   | Zero(a1), Zero(a2) | Not_zero(a1), Not_zero(a2) -> String.compare a1 a2
@@ -24,6 +26,7 @@ let cstr_compare c1 c2 = match c1, c2 with
                                   | 0 -> Pervasives.compare i1 i2
                                   | n -> n
                                   end
+  (* Here we order when the constraints have different types *)
   | Zero _, _ -> 1
   | _, Zero _ -> -1
   | Iscst _, _ -> 1
@@ -38,6 +41,7 @@ let cstr_compare c1 c2 = match c1, c2 with
 module Cstrset = Set.Make(struct type t = cstr let compare = cstr_compare end)
                                          
 let string_of_cstr c = match c with
+  (* A conversion function *)
   | Xor(a,b,c) -> "XOR("^a^","^b^","^c^")"
   | Mc(a,b,c,d,e,f,g,h) -> "MC("^a^","^b^","^c^","^d^","^e^","^f^","^g^","^h^")"
   | Zero(a) -> "ZERO("^a^")"
@@ -46,6 +50,7 @@ let string_of_cstr c = match c with
   | Iscst(s,i) -> "Is_cst("^s^","^(string_of_int i)^")"  
 
 let rec get_modified vars initial result = match vars, initial, result with
+  (* Returns all the variables that have been modified *)
   | [], [], [] -> []
   | x::q, y::r, z::s -> if y == z then get_modified q r s else x::get_modified q r s
   | _ -> failwith "get_modified: the lists don't have the same length"
@@ -73,7 +78,7 @@ let propagator_mc a b c d e f g h store =
   let res_f = improved_consistency bddf cons_f wf random_heuristic_improved_consistency in
   let res_g = improved_consistency bddg cons_g wg random_heuristic_improved_consistency in
   let res_h = improved_consistency bddh cons_h wh random_heuristic_improved_consistency in
-  let cons_a, cons_b, cons_c, cons_d = inverse_mix_column_bdd bdde bddf bddg bddh in (* I use the original bdds instead of the better ones because of the possibility of an empty bdd *)
+  let cons_a, cons_b, cons_c, cons_d = inverse_mix_column_bdd bdde bddf bddg bddh in (* I use the original bdds instead of the propagated ones because of the possibility of an empty bdd *)
   let res_a = improved_consistency bdda cons_a wa random_heuristic_improved_consistency in
   let res_b = improved_consistency bddb cons_b wb random_heuristic_improved_consistency in
   let res_c = improved_consistency bddc cons_c wc random_heuristic_improved_consistency in
@@ -115,26 +120,21 @@ let propagator_not_zero =
   in aux
 
 let propagator_active_sb l b store =
-  (*let not_fixed, rest_bound =
+  let not_fixed, rest_bound =
     List.fold_left
       (fun (not_fixed_acc, rest_bound_acc) (var_in, var_out) -> try let cst_in, cst_out = int_of_bdd (fst (Strmap.find var_in store)), int_of_bdd (fst (Strmap.find var_out store)) in (not_fixed_acc, rest_bound_acc - probaS cst_in cst_out)
                                                                 with Failure _ -> ((var_in, var_out)::not_fixed_acc, rest_bound_acc)
       ) ([], b) l in
   let current_bound = List.length not_fixed * -6 in
   let propag = if current_bound = rest_bound then propagator_psb else propagator_sb in
-      if current_bound >= rest_bound then
-  List.fold_left
-    (fun (new_store, modified_vars) (var_in, var_out) ->
+  if current_bound >= rest_bound then
+    List.fold_left
+      (fun (new_store, modified_vars) (var_in, var_out) ->
         let propag_store, propag_vars = propag var_in var_out new_store in
         propag_store, List.append propag_vars modified_vars
-    ) (store, []) not_fixed
-      else
-        Strmap.add var_in (F,1) (Strmap.add var_out (F,1) new_store), var_in::var_out::modified_vars*)  
-  List.fold_left
-    (fun (new_store, modified_vars) (var_in, var_out) ->
-      let propag_store, propag_vars = propagator_sb var_in var_out new_store in
-      propag_store, List.append propag_vars modified_vars
-    ) (store, []) l
+      ) (store, []) not_fixed
+  else
+    (print_endline "cut";Strmap.add "" (F,1) store, [""])
    
 let propagate cstr store =
   match cstr with
@@ -146,10 +146,11 @@ let propagate cstr store =
   | Iscst(a,i) -> propagator_cst i a store
 
 let vars_of_cstr cstr = match cstr with
+  (* return a set of strings that are the variables that appear in the given constraint *)
   | Xor(a,b,c) -> Strset.add a (Strset.add b (Strset.add c Strset.empty))
   | Mc(a,b,c,d,e,f,g,h) -> Strset.add a (Strset.add b (Strset.add c (Strset.add d (Strset.add e (Strset.add f (Strset.add g (Strset.add h Strset.empty)))))))
   | Zero(a) | Not_zero(a) | Iscst(a,_) -> Strset.add a Strset.empty
-  | ActiveSB(l, b) -> List.fold_left (fun acc (var_in, var_out) -> Strset.add var_in (Strset.add var_out acc)) Strset.empty l
+  | ActiveSB(l, _) -> List.fold_left (fun acc (var_in, var_out) -> Strset.add var_in (Strset.add var_out acc)) Strset.empty l
 
 let rec full_propagation cstrset store cstr_of_var =
   match Cstrset.is_empty cstrset with
@@ -175,17 +176,17 @@ let init_domain cstrset width =
       | Xor(a,b,c) -> Strmap.add a (complete,width) (Strmap.add b (complete,width) (Strmap.add c (complete,width) store_acc)), Strmap.add a (add_or_create a cstr_acc cstr) (Strmap.add b (add_or_create b cstr_acc cstr) (Strmap.add c (add_or_create c cstr_acc cstr) cstr_acc)) 
       | Mc(a,b,c,d,e,f,g,h) -> Strmap.add a (complete,width) (Strmap.add b (complete,width) (Strmap.add c (complete,width) (Strmap.add d (complete,width) (Strmap.add e (complete,width) (Strmap.add f (complete,width) (Strmap.add g (complete,width) (Strmap.add h (complete,width) store_acc))))))), Strmap.add a (add_or_create a cstr_acc cstr) (Strmap.add b (add_or_create b cstr_acc cstr) (Strmap.add c (add_or_create c cstr_acc cstr) (Strmap.add d (add_or_create d cstr_acc cstr) (Strmap.add e (add_or_create e cstr_acc cstr) (Strmap.add f (add_or_create f cstr_acc cstr) (Strmap.add g (add_or_create g cstr_acc cstr) (Strmap.add h (add_or_create h cstr_acc cstr) cstr_acc)))))))
       | Zero(a) | Not_zero(a) | Iscst(a,_) -> Strmap.add a (complete,width) store_acc, Strmap.add a (add_or_create a cstr_acc cstr) cstr_acc
-      | ActiveSB(l,b) -> List.fold_left (fun (complete_acc, cstr_to_var_acc) (var_in,var_out) -> Strmap.add var_in (complete, width) (Strmap.add var_out (complete, width) complete_acc), Strmap.add var_in (add_or_create var_in cstr_to_var_acc cstr) (Strmap.add var_out (add_or_create var_out cstr_to_var_acc cstr) cstr_to_var_acc)) (store_acc, cstr_acc) l
+      | ActiveSB(l,_) -> List.fold_left (fun (complete_acc, cstr_to_var_acc) (var_in,var_out) -> Strmap.add var_in (complete, width) (Strmap.add var_out (complete, width) complete_acc), Strmap.add var_in (add_or_create var_in cstr_to_var_acc cstr) (Strmap.add var_out (add_or_create var_out cstr_to_var_acc cstr) cstr_to_var_acc)) (store_acc, cstr_acc) l
     ) cstrset (Strmap.empty, Strmap.empty)
   
 
             
 let store_size store =
-  Strmap.fold (fun k (v,w) acc -> cardinal v + acc) store 0
+  Strmap.fold (fun _ (v,_) acc -> B.mult_big_int (cardinal v) acc) store B.unit_big_int
 
 let split_store store sbox_vars =
-  let chosen_sbox_var = "" in (*List.fold_left (fun acc elt -> if acc = "" then if cardinal (fst (Strmap.find elt store)) > 1  then elt else acc else acc) "" sbox_vars in*)
-  let (_,chosen_key) = if chosen_sbox_var = "" then Strmap.fold (fun k (v,w) (card,key) -> if cardinal v > card then (cardinal v,k) else (card,key)) store (0,"") else (0, chosen_sbox_var) in
+  let _,chosen_sbox_var = List.fold_left (fun (card,key) elt -> let bdd_elt, _ = Strmap.find elt store in if cardinal bdd_elt > card then (cardinal bdd_elt,elt) else (card,key)) (B.unit_big_int,"") sbox_vars in
+  let (_,chosen_key) = if chosen_sbox_var = "" then Strmap.fold (fun k (v,_) (card,key) -> if cardinal v > card then (cardinal v,k) else (card,key)) store (B.unit_big_int,"") else (B.zero_big_int, chosen_sbox_var) in
   let (chosen_bdd,chosen_width) = Strmap.find chosen_key store in
   let (bdd1,bdd2) = split_backtrack_first chosen_bdd in
   [ Strmap.add chosen_key (bdd1,chosen_width) store; Strmap.add chosen_key (bdd2,chosen_width) store], chosen_key
@@ -235,21 +236,25 @@ let is_solution_cstr cstr cststore =
   | Iscst(a,i) -> Strmap.find a cststore = i, 0
     
 let is_solution cstrset cststore =
-  Cstrset.fold (fun cstr (b_acc, prob_acc) -> if b_acc then (let b, prob = is_solution_cstr cstr cststore in if not b then print_endline (string_of_cstr cstr);b, prob + prob_acc) else b_acc, 0) cstrset (true, 0)
+  Cstrset.fold (fun cstr (b_acc, prob_acc) -> if b_acc then (let b, prob = is_solution_cstr cstr cststore in b, prob + prob_acc) else b_acc, 0) cstrset (true, 0)
   
 let rec backtrack cstrset store acc depth modified_var (cstr_of_var, sbox_vars, cstr_bound) =
-  if depth < 10 then print_endline ("backtrack"^(string_of_int depth));
+  if depth < 50 then print_endline ("backtrack"^(string_of_int depth));
+  print_endline (B.string_of_big_int (store_size store));
   let propagated_store = full_propagation 
                            (match modified_var with
-                            | Some a -> (Strmap.find a cstr_of_var)
+                            | Some a when cardinal (fst (Strmap.find a store)) = B.unit_big_int -> Cstrset.empty
+                            | Some a -> Strmap.find a cstr_of_var
                             | None -> cstrset)
                            store cstr_of_var in
+  print_endline (B.string_of_big_int (store_size propagated_store));
+  let _ = if depth = 50 then failwith "test" in
   (* Strmap.iter (fun k (elt,w) -> if cardinal elt > 1 then (print_endline k;print_endline (string_of_int (cardinal elt)))) propagated_store;*)
   match Strmap.is_empty propagated_store, store_size propagated_store with
   | true, _ -> acc
-  | _, n when n = Strmap.cardinal propagated_store -> let cststore = Strmap.fold (fun key (bdd,w) acc -> Strmap.add key (int_of_bdd bdd) acc) propagated_store Strmap.empty in
+  | _, n when n = B.unit_big_int -> let cststore = Strmap.fold (fun key (bdd,_) acc -> Strmap.add key (int_of_bdd bdd) acc) propagated_store Strmap.empty in
                                                       let is_sol, prob = is_solution cstrset cststore in
-                                                      if is_sol then (print_endline ("one_solution"^(string_of_int (List.length acc + 1))); print_endline ("proba = "^(string_of_int prob));failwith "solution";(cststore, prob)::acc) else acc
+                                                      if is_sol then (print_endline ("one_solution"^(string_of_int (List.length acc + 1))); print_endline ("proba = "^(string_of_int prob));cstr_bound := prob + 1;(cststore, prob)::acc) else acc
   | _ -> let split_stores, split_var = split_store propagated_store sbox_vars in
          List.fold_left (fun new_acc backtrack_store -> backtrack cstrset backtrack_store new_acc (depth+1) (Some split_var) (cstr_of_var, sbox_vars, cstr_bound)) acc split_stores
      

@@ -1,3 +1,5 @@
+OPAMDIR   := $(shell opam config var lib)
+ZARITHDIR := $(OPAMDIR)/zarith
 OCB = ocamlbuild
 
 all: main.ml
@@ -5,3 +7,6 @@ all: main.ml
 
 clean:
 	$(OCB) -clean
+
+build:
+	dune build

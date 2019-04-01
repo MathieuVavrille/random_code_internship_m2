@@ -1,7 +1,6 @@
 open Bdd
 open Useful
 
-
 let multiple_mdd_consistency m bdds =
   (* ensures MDD consistency on m wrt m' and returns m *)
   let zero_support = Hashtbl.create 101 in (* all the nodes whose 0-edge is consistent *)
@@ -13,7 +12,7 @@ let multiple_mdd_consistency m bdds =
           match m, m' with
           | F, _ | _, F -> F
           | T, _ -> m'
-          | N(a,b), T -> failwith "mdd_consistency: the bdds do not have the same size"
+          | N(_,_), T -> failwith "mdd_consistency: the bdds do not have the same size"
           | N(a,b), N(c,d) ->
              let e,f = search_support a c, search_support b d in
              let new_bdd = bdd_of e f in
@@ -130,7 +129,7 @@ let split_backtrack_optimal_next_width m =
   
   
 let increase_value hash key value =
-    Hashtbl.add hash key (value + try Hashtbl.find hash key with Not_found -> 0)
+    Hashtbl.add hash key (B.add_big_int value (try Hashtbl.find hash key with Not_found -> B.zero_big_int))
   
 let rec replace_chain hash start reference =
   (* I have a hashtable that changes bdds into others, and I have to do it many times *)
@@ -143,11 +142,11 @@ let rec replace_chain hash start reference =
 let limit m width heuristic = (* suppose that width >= 1 *)
   (* This function takes as input a bdd, and returns a limited-width bdd overapproximating the previous one *)
   let nb_paths_to = Hashtbl.create 101 in
-  Hashtbl.add nb_paths_to (ref m) 1;
+  Hashtbl.add nb_paths_to (ref m) B.unit_big_int;
   let replace = Hashtbl.create 101 in
   let rec reduce layer = match Bddset.cardinal layer with
     | n when n <= width -> layer
-    | n -> let (m1, m2) = heuristic layer nb_paths_to in
+    | _ -> let (m1, m2) = heuristic layer nb_paths_to in
            let uni = union m1 m2 in
            if uni != m1 then begin increase_value nb_paths_to (ref uni) (Hashtbl.find nb_paths_to (ref m1));
                                    Hashtbl.add replace (ref m1) uni end;
@@ -182,11 +181,11 @@ let limit m width heuristic = (* suppose that width >= 1 *)
   in
   replace_bdd m
 
-let bdd_first_come_heuristic bdds paths =
+let bdd_first_come_heuristic bdds _ =
   Bddset.fold (fun e a -> begin match e, a with
       | elt, (F, _) -> (elt, F)
       | elt, (a, F) -> (a, elt)
-      | elt, acc -> acc end
+      | _, acc -> acc end
     ) bdds (F,F)
   
 let bdd_merge_value_first_bdd_heuristic bdds nb_paths_to =
@@ -197,13 +196,13 @@ let bdd_merge_value_first_bdd_heuristic bdds nb_paths_to =
   fst (Bddset.fold (fun elt2 (best, best_value) ->
                     (* We compute the merge value as defined in my report *)
                     let cardinal_two = cardinal (intersection elt elt2) in
-                    let current_value = nb_paths_to_elt*(cardinal elt2 - cardinal_two) + (Hashtbl.find nb_paths_to (ref elt2))*(card_elt - cardinal_two) in
-                    if (current_value < best_value || best_value = max_int) then ((elt, elt2), current_value) else (best, best_value)
-                  ) new_blss ((F, F),max_int))
+                    let current_value = B.add_big_int (B.mult_big_int nb_paths_to_elt (B.sub_big_int (cardinal elt2) (cardinal_two))) (B.mult_big_int (Hashtbl.find nb_paths_to (ref elt2)) (B.sub_big_int (card_elt) (cardinal_two))) in
+                    if current_value < best_value || best_value = B.zero_big_int then ((elt, elt2), current_value) else (best, best_value)
+                  ) new_blss ((F, F), B.zero_big_int))
   
 let bdd_merge_value_heuristic bdds nb_paths_to =
   let rec aux bdds (trees, mv) =
-    if mv = 1 then (trees, mv) else begin
+    if mv = B.unit_big_int then (trees, mv) else begin
         (* the try is here to say that when the set is empty, stop searching *)
         try let elt = Bddset.choose bdds in
             let nb_paths_to_elt = Hashtbl.find nb_paths_to (ref elt) in
@@ -212,19 +211,19 @@ let bdd_merge_value_heuristic bdds nb_paths_to =
             aux new_blss (Bddset.fold (fun elt2 (best, best_value) ->
                               (* We compute the merge value as defined in my report *)
                               let cardinal_two = cardinal (intersection elt elt2) in
-                              let current_value = nb_paths_to_elt*(cardinal elt2 - cardinal_two) + (Hashtbl.find nb_paths_to (ref elt2))*(card_elt - cardinal_two) in
-                              if (current_value < best_value || best_value = max_int) then ((elt, elt2), current_value) else (best, best_value)
+                              let current_value = B.add_big_int (B.mult_big_int nb_paths_to_elt (B.sub_big_int (cardinal elt2) (cardinal_two))) (B.mult_big_int (Hashtbl.find nb_paths_to (ref elt2)) (B.sub_big_int (card_elt) (cardinal_two))) in
+                              if (current_value < best_value || best_value = B.zero_big_int) then ((elt, elt2), current_value) else (best, best_value)
                             ) new_blss (trees, mv))
         with Not_found -> (trees, mv)
       end
   in
-  fst (aux bdds ((F, F),max_int))
+  fst (aux bdds ((F, F), B.zero_big_int))
   
   
 let limited_bdd_of_bitvectset bls width heuristic =
   (* takes as input a BDD and return a BDD of bounded width. The merge heuristic can be changed *)
   let nb_paths_to = Hashtbl.create 101 in
-  Hashtbl.add nb_paths_to bls 1;
+  Hashtbl.add nb_paths_to bls B.unit_big_int;
   let replacement = Hashtbl.create 101 in
   let hash_split = Hashtbl.create 101 in
   let rec reduce layer =
@@ -274,12 +273,12 @@ let limited_bdd_of_bitvectset bls width heuristic =
   in
   generate_bdd bls
 
-let first_come_heuristic blss nb_paths_to =
+let first_come_heuristic blss _ =
   Bvsetset.fold (fun e a -> begin match e, a with
       | elt, acc when Bvset.is_empty elt-> acc
       | elt, (a, _) when Bvset.is_empty a -> (elt, Bvset.empty)
       | elt, (a, b) when Bvset.is_empty b -> (a, elt)
-      | elt, acc -> acc end
+      | _, acc -> acc end
     ) blss (Bvset.empty, Bvset.empty)
 
 let find hash key =
@@ -385,10 +384,10 @@ let improved_consistency_multiple m m' width choice =
                         | T | F -> acc
                         | N(F,F) -> failwith "NFF should not happen because it is reduced"
                         | N(F,a) ->
-                           let zero, one = split_zero_one bdds in
+                           let _, one = split_zero_one bdds in
                            Bddbddsset.add (a, one) acc
                         | N(a,F) -> 
-                           let zero, one = split_zero_one bdds in
+                           let zero, _ = split_zero_one bdds in
                            Bddbddsset.add (a, zero) acc
                         | N(a,b) ->
                            let zero, one =  split_zero_one bdds in

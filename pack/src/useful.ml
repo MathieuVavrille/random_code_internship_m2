@@ -149,7 +149,7 @@ let random_set max =
   let rec aux acc current =
     match current with
     | -1 -> acc
-    | n -> match Random.bool () with
+    | _ -> match Random.bool () with
            | true -> aux (Bvset.add (bitvect_of_int current max) acc) (current-1)
            | false -> aux acc (current-1)
   in
