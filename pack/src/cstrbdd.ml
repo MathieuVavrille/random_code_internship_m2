@@ -344,8 +344,9 @@ let rec inter_with_union bdd bdds =
      bdd_of (inter_with_union a zero) (inter_with_union b one)
 
      
+(* choice is the merge choice (not the heuristic) for nodes inside the BDD when it becomes too wide *)     
 let improved_consistency_multiple m m' width choice =
-  dot_file m "output/bug1.dot";
+  (* replacement contains all the mappings from the ancient, not-merged, nodes to the new merged nodes *)
   let replacement = Hashtbl.create 101 in
   let add_to_hash hash bdd set new_set =
     (* useful function to add a set to a hashtbl in a hashtbl *)
