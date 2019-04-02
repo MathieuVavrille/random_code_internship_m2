@@ -155,10 +155,39 @@ let random_set max =
   in
   aux Bvset.empty (pow 2 max)
 
+  
 let rec complete_bdd depth = match depth with
   | 0 -> T
   | _ -> let res = complete_bdd (depth-1) in
          bdd_of res res
+
+let cutted_bdd =
+  let computed = Hashtbl.create 101 in
+  let rec aux m depth =
+    try Hashtbl.find computed (ref m)
+    with Not_found ->
+      let res = match depth, m with
+        | _, F -> F
+        | 0, _ -> m
+        | _, T -> T
+        | _, N(a,b) -> bdd_of (aux a (depth-1)) (aux b (depth-1)) in
+      Hashtbl.add computed (ref m) res;
+      res in
+  aux
+
+let complete_end depth =
+  let full_bdd = complete_bdd depth in
+  let computed = Hashtbl.create 101 in
+  let rec aux m =
+    try Hashtbl.find computed (ref m)
+    with Not_found ->
+      let res = match m with
+        | T -> full_bdd
+        | F -> F
+        | N(a,b) -> bdd_of (aux a) (aux b) in
+      Hashtbl.add computed (ref m) res;
+      res in
+  aux
   
     
 let dot_file m filename =

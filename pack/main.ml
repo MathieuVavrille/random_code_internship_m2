@@ -9,11 +9,16 @@ let main width =
   let cstrset, sbox_vars, cstr_bound = parse () in
   close_in in_file;
   let complete_store, cstr_of_var = init_domain cstrset width in
-  let res = backtrack cstrset complete_store [] 0 None (cstr_of_var, sbox_vars, cstr_bound) in
+  let reduced_cstrset, reduced_store = propag_of_unary_cstr complete_store cstrset in
+  let res = backtrack reduced_cstrset reduced_store [] 0 None (cstr_of_var, sbox_vars, cstr_bound, ref 0) in
   res
-
+  
 let _ = main 1
-                
+
+let _ = print_endline (string_of_float (!time_active_sb))
+let _ = print_endline (string_of_float (!time_propagate))
+let _ = print_endline (string_of_float (!time_full))
+          
     (*let _ = print_string (generate_program 3)*)
 
 (*let _ = for i=0 to 255 do

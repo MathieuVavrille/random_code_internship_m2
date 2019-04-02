@@ -76,8 +76,6 @@ let width m = Array.fold_left (fun acc elt ->
       max acc elt
     ) 0 (array_width m)
 
-
-
 (********************************)
 (* Set theoretics, uses caching, and will surely increase the width *)
   

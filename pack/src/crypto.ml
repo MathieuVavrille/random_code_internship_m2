@@ -91,7 +91,7 @@ let input_output_sbox =
   with _ -> let res = input_output_bdd sbox in
             save_to_file res "src/saved_bdd/input_output_sbox.bdd";
             res
-
+            
 let input_output_inverse_sbox = 
   try get_from_file "src/input_output_inverse_sbox.bdd"
   with _ -> let res = input_output_bdd inverse_sbox in

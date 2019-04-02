@@ -3,4 +3,5 @@
 (executable
  (name main)
  (libraries zarith bddlib)
+ (ocamlopt_flags (:standard -p))
 )
