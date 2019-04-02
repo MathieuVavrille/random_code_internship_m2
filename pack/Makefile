@@ -8,5 +8,5 @@ all: main.ml
 clean:
 	$(OCB) -clean
 
-build:
-	dune build
+exec:
+	dune build main.exe && time ./_build/default/main.exe
