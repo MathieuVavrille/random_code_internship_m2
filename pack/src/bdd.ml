@@ -203,7 +203,7 @@ let bdd_xor =
             match m, m' with
             | T, T -> T
             | F,_ | _,F -> F
-            | T,_ | _,T -> failwith "bdd_and: not the same depth"
+            | T,_ | _,T -> failwith "bdd_xor: not the same depth"
             | N(a,b), N(c,d) -> bdd_of (union (aux a c) (aux b d)) (union (aux a d) (aux b c))
           in
           Hashtbl.add hash_xor (ref m,ref m') res;

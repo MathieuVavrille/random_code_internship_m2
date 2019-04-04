@@ -103,7 +103,7 @@ let probaS a b =
   (* Probability that inputing a in the differential s-box gives b *)
   let count = ref (-16) in
   for i=0 to 255 do
-      if sbox.(i) lxor sbox.(i lxor a) = b then incr count
+    if sbox.(i) lxor sbox.(i lxor a) = b then incr count
   done;
     !count/2
 

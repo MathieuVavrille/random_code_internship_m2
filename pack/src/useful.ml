@@ -163,33 +163,52 @@ let rec complete_bdd depth = match depth with
 
 let cutted_bdd =
   let computed = Hashtbl.create 101 in
-  let rec aux m depth =
-    try Hashtbl.find computed (ref m)
-    with Not_found ->
-      let res = match depth, m with
-        | _, F -> F
-        | 0, _ -> m
-        | _, T -> T
-        | _, N(a,b) -> bdd_of (aux a (depth-1)) (aux b (depth-1)) in
-      Hashtbl.add computed (ref m) res;
-      res in
+  let rec aux wanted_depth m =
+    if depth m <= wanted_depth then m else begin
+        try Hashtbl.find computed (ref m)
+        with Not_found ->
+          let res = match wanted_depth, m with
+            | _, F -> F
+            | 0, _ -> T
+            | _, T -> failwith "cutted_bdd: wanted to cut a bdd that is too small"
+            | _, N(a,b) -> bdd_of (aux (wanted_depth-1) a) (aux (wanted_depth-1) b) in
+          Hashtbl.add computed (ref m) res;
+      res end in
   aux
 
-let complete_end depth =
-  let full_bdd = complete_bdd depth in
+(* Return the bdd representing the concatenation of the two bdds *)
+let concatenate_bdd m m' = 
   let computed = Hashtbl.create 101 in
   let rec aux m =
     try Hashtbl.find computed (ref m)
     with Not_found ->
       let res = match m with
-        | T -> full_bdd
+        | T -> m'
         | F -> F
         | N(a,b) -> bdd_of (aux a) (aux b) in
       Hashtbl.add computed (ref m) res;
       res in
-  aux
+  aux m
+
+let complete_end depth m =
+  let full_bdd = complete_bdd depth in
+  concatenate_bdd m full_bdd
+
+let give_depth wanted_depth m =
+  let current_depth = depth m in
+  let res = 
+  if wanted_depth > current_depth then
+    complete_end (wanted_depth - current_depth) m
+  else
+    cutted_bdd wanted_depth m
+  in
+  if depth res <> wanted_depth then failwith "failure: not good depth" else res
+
+
+
+(*****************************************************)
+(* Saving, printing in dot and uploading from a file *)
   
-    
 let dot_file m filename =
   (* Outputs a string that can be processed with graphviz dot *)
   let s = ref "graph g {\n" in

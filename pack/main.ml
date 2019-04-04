@@ -1,5 +1,5 @@
 open Solver
-  
+   
 let _ = Random.init 0
 
 let main width = 
@@ -12,8 +12,20 @@ let main width =
   let reduced_cstrset, reduced_store = propag_of_unary_cstr complete_store cstrset in
   let res = backtrack reduced_cstrset reduced_store [] 0 None (cstr_of_var, sbox_vars, cstr_bound, ref 0) in
   res
-  
-let _ = main 1
+(*
+open Cstrbdd
+open Useful
+open Crypto
+
+let complete16 = complete_bdd 16
+
+let cst_low = concatenate_bdd (complete_bdd 8) (bdd_of_int 171 8 8)
+
+let cst_high = concatenate_bdd (bdd_of_int 171 8 8) (complete_bdd 8)
+             
+let _ = dot_file (improved_consistency cst_high input_output_sbox 2 random_heuristic_improved_consistency) "output/test.dot"
+ *)  
+let _ = main 1000000
 
 let _ = print_endline (string_of_float (!time_active_sb))
 let _ = print_endline (string_of_float (!time_propagate))

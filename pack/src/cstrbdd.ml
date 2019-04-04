@@ -348,16 +348,16 @@ let rec inter_with_union bdd bdds =
 let improved_consistency_multiple m m' width choice =
   (* replacement contains all the mappings from the ancient, not-merged, nodes to the new merged nodes *)
   let replacement = Hashtbl.create 101 in
-  let add_to_hash hash bdd set new_set =
+  let add_to_hash hash bdd set elt =
     (* useful function to add a set to a hashtbl in a hashtbl *)
-    Hashtbl.add hash (ref bdd) (try Bddsmap.add set new_set (Hashtbl.find hash (ref bdd))
-                                with Not_found -> Bddsmap.singleton set new_set)
+    Hashtbl.add hash (ref bdd) (try Bddsmap.add set elt (Hashtbl.find hash (ref bdd))
+                                with Not_found -> Bddsmap.singleton set elt)
   in
   let split_zero_one bdds =
     (* Take a bddset as input and return two bdds: one with all the 0-subtrees, and the other with all the 1-subtrees *) 
     Bddset.fold (fun elt (zeroacc, oneacc) ->
         match elt with
-        | T -> failwith "test_change_name: not the same size"
+        | T -> failwith "split_zero_one_improved_cons_mult: not the same size"
         | F -> (zeroacc, oneacc)
         | N(F,F) -> failwith "inter_with_union : N(F,F) should be equal to F"
         | N(F,c) -> (zeroacc, Bddset.add c oneacc)
@@ -371,8 +371,6 @@ let improved_consistency_multiple m m' width choice =
     | false -> bddbsset
     | true -> let s1, s2 = choice bddbsset in
               if fst s1 != fst s2 then failwith "the choice returned two nodes that don't come from the same node";
-              (*print_endline "choice";
-              print_endline (string_of_int width);*)
               let merge_union = Bddset.union (snd s1) (snd s2) in
               add_to_hash replacement (fst s1) (snd s1) merge_union;
               add_to_hash replacement (fst s2) (snd s2) merge_union;              
@@ -406,26 +404,37 @@ let improved_consistency_multiple m m' width choice =
     with Not_found -> (bdd, bdds)
   in
   let count = ref 0 in
+  let computed = Hashtbl.create 101 in
   let rec generate_new_bdd bdd bdds =
-    incr count;
-    (*print_endline (string_of_int (!count));*)
-    (* Will generate the new bdd *)
-    let (new_bdd, new_bdds) = replace_chain_set (bdd, bdds) in
-    match new_bdd, Bddset.is_empty bdds with
-    | F, _ | _, true -> F
-    | T, false -> T (*if Bddset.compare (Bddset.singleton T) new_bdds = 0 then T else (print_endline ("test");failwith ("not the same depth while generating new bdd"^(string_of_bddset bdds)))*)
-    | N(a,b), false -> 
-       let zero, one = split_zero_one new_bdds in
-       bdd_of (generate_new_bdd a zero) (generate_new_bdd b one)
+    (*print_endline (string_of_int (Hashtbl.length computed));*)
+    try Bddsmap.find bdds (Hashtbl.find computed (ref bdd))
+    with Not_found -> 
+          incr count;
+          (*print_endline "generate_new_bdd";
+          print_endline (string_of_int (Bddset.cardinal bdds));*)
+          (*print_endline (string_of_bddset bdds);*)
+          (*print_endline (string_of_int (!count));*)
+          (* Will generate the new bdd *)
+          let (new_bdd, new_bdds) = replace_chain_set (bdd, bdds) in
+          try Bddsmap.find bdds (Hashtbl.find computed (ref bdd))
+          with Not_found -> 
+            (*print_endline "replaced";*)
+                (*print_endline (string_of_bddset bdds);*)
+                let res = match new_bdd, Bddset.is_empty bdds with
+                | F, _ | _, true -> F
+                | T, false -> T (*if Bddset.compare (Bddset.singleton T) new_bdds = 0 then T else (print_endline ("test");failwith ("not the same depth while generating new bdd"^(string_of_bddset bdds)))*)
+                | N(a,b), false -> 
+                   let zero, one = split_zero_one new_bdds in
+                   bdd_of (generate_new_bdd a zero) (generate_new_bdd b one)
+                in
+                add_to_hash computed bdd bdds res;
+                res
   in
   (*print_endline "improved";*)
   compute_layer (Bddbddsset.singleton (m, m'));
-  (*print_endline "passed";*)
   generate_new_bdd m m'
-
+  
 let improved_consistency m m' width choice =
-  dot_file m "output/bug1.dot";
-  dot_file m' "output/bug2.dot";
   improved_consistency_multiple m (Bddset.singleton m') width choice
 
 
