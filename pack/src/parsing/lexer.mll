@@ -11,6 +11,7 @@ rule token = parse    (* la "fonction" aussi s'appelle token *)
   | ',' 		      { COMMA }
   | '('                       { LPAREN }
   | ')'                       { RPAREN }
+  | '_' 		      { UNDER }
 
   | "ZERO"		      { ZERO }
   | "NOT_ZERO"		      { NOTZERO }
@@ -18,12 +19,16 @@ rule token = parse    (* la "fonction" aussi s'appelle token *)
   | "SB" 		      { SB }
   | "MC" 		      { MC }
   | "CST" 		      { CST }
+  | "x_" 		      { XUNDER }
+  | "sx_" 		      { SXUNDER }
+  | "k_" 		      { KUNDER }
+  | "sk_" 		      { SKUNDER }
+  | "z_" 		      { ZUNDER }
+  | '_' 		      { UNDER }
 
-  | (['a'-'z' '_']['a'-'z' 'A'-'Z' '_' '0'-'9']* as s) { VAR (s) }
   | (['0'-'9']* as s) 	   	       		       { INT (int_of_string s) }
   | [' ' '\t' '\n']           			       { token lexbuf }  
   | "(*" ('*'[^')'] | [^'*'])* '*'? "*)"       	       { token lexbuf }  (* Comments *)
-  | eof                        	    		       { EOF } 
 
 
 

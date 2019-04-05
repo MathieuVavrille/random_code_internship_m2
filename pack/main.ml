@@ -25,11 +25,9 @@ let cst_high = concatenate_bdd (bdd_of_int 171 8 8) (complete_bdd 8)
              
 let _ = dot_file (improved_consistency cst_high input_output_sbox 2 random_heuristic_improved_consistency) "output/test.dot"
  *)  
-let _ = main 1000000
+let _ = main 1
 
 let _ = print_endline (string_of_float (!time_active_sb))
-let _ = print_endline (string_of_float (!time_propagate))
-let _ = print_endline (string_of_float (!time_full))
           
     (*let _ = print_string (generate_program 3)*)
 

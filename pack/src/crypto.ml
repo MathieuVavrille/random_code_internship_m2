@@ -180,7 +180,7 @@ let gl_triple m =
 let mix_column_bdd x0 x1 x2 x3 =
   bdd_xor (gl_double x0) (bdd_xor (gl_triple x1) (bdd_xor x2 x3)),
   bdd_xor (gl_double x1) (bdd_xor (gl_triple x2) (bdd_xor x3 x0)),
-  bdd_xor (gl_double x2) (bdd_xor (gl_triple x3) (bdd_xor x0 x1)),
+   bdd_xor (gl_double x2) (bdd_xor (gl_triple x3) (bdd_xor x0 x1)),
   bdd_xor (gl_double x3) (bdd_xor (gl_triple x0) (bdd_xor x1 x2))
 
 let gl_nine powers =
