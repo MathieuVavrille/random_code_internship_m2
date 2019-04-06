@@ -241,7 +241,7 @@ let limited_bdd_of_bitvectset bls width heuristic =
     | true, _ | _, false -> ()
     | _ ->
        let new_layer = Bvsetset.fold (fun t acc ->
-                           let (zero, one) = split_zero_one t in
+                           let (zero, one) = split_zero_one_bvset t in
                            Hashtbl.add hash_split t (zero, one);
                            match Bvset.is_empty zero, Bvset.is_empty one with
                            | true, true -> acc
@@ -403,34 +403,25 @@ let improved_consistency_multiple m m' width choice =
         with Not_found -> (bdd, bdds)
     with Not_found -> (bdd, bdds)
   in
-  let count = ref 0 in
   let computed = Hashtbl.create 101 in
   let rec generate_new_bdd bdd bdds =
     (*print_endline (string_of_int (Hashtbl.length computed));*)
     try Bddsmap.find bdds (Hashtbl.find computed (ref bdd))
-    with Not_found -> 
-          incr count;
-          (*print_endline "generate_new_bdd";
-          print_endline (string_of_int (Bddset.cardinal bdds));*)
-          (*print_endline (string_of_bddset bdds);*)
-          (*print_endline (string_of_int (!count));*)
+    with Not_found ->
           (* Will generate the new bdd *)
           let (new_bdd, new_bdds) = replace_chain_set (bdd, bdds) in
           try Bddsmap.find bdds (Hashtbl.find computed (ref bdd))
           with Not_found -> 
-            (*print_endline "replaced";*)
-                (*print_endline (string_of_bddset bdds);*)
-                let res = match new_bdd, Bddset.is_empty bdds with
-                | F, _ | _, true -> F
-                | T, false -> T (*if Bddset.compare (Bddset.singleton T) new_bdds = 0 then T else (print_endline ("test");failwith ("not the same depth while generating new bdd"^(string_of_bddset bdds)))*)
-                | N(a,b), false -> 
-                   let zero, one = split_zero_one new_bdds in
-                   bdd_of (generate_new_bdd a zero) (generate_new_bdd b one)
-                in
-                add_to_hash computed bdd bdds res;
-                res
+            let res = match new_bdd, Bddset.is_empty bdds with
+              | F, _ | _, true -> F
+              | T, false -> T (*if Bddset.compare (Bddset.singleton T) new_bdds = 0 then T else (print_endline ("test");failwith ("not the same depth while generating new bdd"^(string_of_bddset bdds)))*)
+              | N(a,b), false -> 
+                 let zero, one = split_zero_one new_bdds in
+                 bdd_of (generate_new_bdd a zero) (generate_new_bdd b one)
+            in
+            add_to_hash computed bdd bdds res;
+            res
   in
-  (*print_endline "improved";*)
   compute_layer (Bddbddsset.singleton (m, m'));
   generate_new_bdd m m'
   

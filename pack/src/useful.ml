@@ -81,7 +81,7 @@ let bitvect_of_int integer size =
     | _ -> aux ((integer mod 2 = 1)::acc) (integer/2) (size - 1)
   in aux [] integer size
 
-let split_zero_one set =
+let split_zero_one_bvset set =
   (* Splits a bit-list set into the ones that starts with zero and the ones that start with one *)
   Bvset.fold
     (fun elt (zero, one) -> match elt with
@@ -96,7 +96,7 @@ let rec bdd_of_bitvectset set =
   | true -> F
   | false ->
      match Bvset.exists (fun x -> x != []) set with
-     | true -> let (zero, one) = split_zero_one set in
+     | true -> let (zero, one) = split_zero_one_bvset set in
                bdd_of (bdd_of_bitvectset zero) (bdd_of_bitvectset one)
      | false -> T
 
@@ -292,3 +292,37 @@ let rec list_compare f l1 l2 = match l1, l2 with
   | x::q, y::r -> match f x y with
                   | 0 -> list_compare f q r
                   | n -> n
+
+                       
+let inter_of_union = 
+  let computed = Hashtbl.create 101 in
+  let split_zero_one bdds =
+    (* Take a bddset as input and return two bdds: one with all the 0-subtrees, and the other with all the 1-subtrees *) 
+    Bddset.fold (fun elt (zeroacc, oneacc) ->
+        match elt with
+        | T -> failwith "split_zero_one_improved_cons_mult: not the same size"
+        | F -> (zeroacc, oneacc)
+        | N(F,F) -> failwith "inter_with_union : N(F,F) should be equal to F"
+        | N(F,c) -> (zeroacc, Bddset.add c oneacc)
+        | N(c,F) -> (Bddset.add c zeroacc, oneacc)
+        | N(c,d) -> (Bddset.add c zeroacc, Bddset.add d oneacc)
+      ) bdds (Bddset.empty, Bddset.empty)
+  in
+  let rec aux bdd bdds =
+    try Bddsmap.find bdds (Hashtbl.find computed (ref bdd))
+    with Not_found ->
+      try Bddsmap.find bdds (Hashtbl.find computed (ref bdd))
+      with Not_found -> 
+        let res = match bdd, Bddset.is_empty bdds with
+          | F, _ | _, true -> F
+          | T, false -> T 
+          | N(a,b), false -> 
+             let zero, one = split_zero_one bdds in
+             bdd_of (aux a zero) (aux b one)
+        in
+        (* add the element in the table *)
+        Hashtbl.add computed (ref bdd) (try Bddsmap.add bdds res (Hashtbl.find computed (ref bdd))
+                                with Not_found -> Bddsmap.singleton bdds res);
+        res in
+  aux
+          
