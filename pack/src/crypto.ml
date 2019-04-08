@@ -168,14 +168,30 @@ let add_zero_end =
           Hashtbl.add computed (ref m) res;
           res
   in aux
-               
-let gl_double m =
-  match m with
-  | T | F -> failwith "lsl:the domain is empty"
-  | N(a,b) -> union (add_zero_end a) (bdd_xor (add_zero_end b) (bdd_of_int 27 8 8))
 
-let gl_triple m =
-  bdd_xor (gl_double m) m
+
+(* For the two next functions the hashtable is maybe not necessary *)
+let gl_double =
+  let computed = Hashtbl.create 101 in
+  let aux m =
+    try Hashtbl.find computed (ref m)
+    with Not_found ->
+          let res = match m with
+            | T | F -> failwith "lsl:the domain is empty"
+            | N(a,b) -> union (add_zero_end a) (bdd_xor (add_zero_end b) (bdd_of_int 27 8 8)) in
+          Hashtbl.add computed (ref m) res;
+          res in
+  aux
+                      
+let gl_triple =
+  let computed = Hashtbl.create 101 in
+  let aux m =
+    try Hashtbl.find computed (ref m)
+    with Not_found ->
+      let res = bdd_xor (gl_double m) m in
+      Hashtbl.add computed (ref m) res;
+      res in
+  aux
       
 let mix_column_bdd x0 x1 x2 x3 =
   bdd_xor (gl_double x0) (bdd_xor (gl_triple x1) (bdd_xor x2 x3)),

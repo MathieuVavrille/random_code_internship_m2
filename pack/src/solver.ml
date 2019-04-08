@@ -84,18 +84,24 @@ let string_of_cstr c = match c with
                 
 (* Returns all the variables that have been modified *)
 let get_modified = List.fold_left (fun acc (x,bdd,res) -> if bdd == res then acc else x::acc) []
-                 
+
+let time_xor = ref 0.
 let propagator_xor a b c store =
+  let t = Sys.time() in
   let bdda,wa = Store.find a store in
   let bddb,wb = Store.find b store in
   let bddc,wc = Store.find c store in
   let deptha, depthb, depthc = depth bdda, depth bddb, depth bddc in
   let res_a = improved_consistency bdda (bdd_xor (give_depth deptha bddb) (give_depth deptha bddc)) wa random_heuristic_improved_consistency in
   let res_b = improved_consistency bddb (bdd_xor (give_depth depthb bdda) (give_depth depthb bddc)) wb random_heuristic_improved_consistency in
-  let res_c = improved_consistency bddc (bdd_xor (give_depth depthc bdda) (give_depth depthc bddb)) wc random_heuristic_improved_consistency in                               
+  let res_c = improved_consistency bddc (bdd_xor (give_depth depthc bdda) (give_depth depthc bddb)) wc random_heuristic_improved_consistency in
+  time_xor := !time_xor +. Sys.time () -. t;
   Store.add a (res_a,wa) (Store.add b (res_b,wb) (Store.add c (res_c,wc) store)), get_modified [a,bdda,res_a;b,bddb,res_b;c,bddc,res_c]
 
+let time_mc = ref 0.
+let time_fun_mc = ref 0.
 let propagator_mc a b c d e f g h store =
+  let t = Sys.time() in
   let bdda,wa = Store.find a store in
   let bddb,wb = Store.find b store in
   let bddc,wc = Store.find c store in
@@ -104,37 +110,44 @@ let propagator_mc a b c d e f g h store =
   let bddf,wf = Store.find f store in
   let bddg,wg = Store.find g store in
   let bddh,wh = Store.find h store in
+  let t2 = Sys.time() in
   let cons_e, cons_f, cons_g, cons_h = mix_column_bdd (cutted_bdd 8 bdda) (cutted_bdd 8 bddb) (cutted_bdd 8 bddc) (cutted_bdd 8 bddd) in
+  time_fun_mc := !time_fun_mc +. Sys.time () -. t2;
   let res_e = improved_consistency bdde cons_e we random_heuristic_improved_consistency in
   let res_f = improved_consistency bddf cons_f wf random_heuristic_improved_consistency in
   let res_g = improved_consistency bddg cons_g wg random_heuristic_improved_consistency in
   let res_h = improved_consistency bddh cons_h wh random_heuristic_improved_consistency in
-  let cons_a, cons_b, cons_c, cons_d = inverse_mix_column_bdd bdde bddf bddg bddh in (* I use the original bdds instead of the propagated ones because of the possibility of an empty bdd *)
-  let res_a = improved_consistency bdda (give_depth 16 cons_a) wa random_heuristic_improved_consistency in
-  let res_b = improved_consistency bddb (give_depth 16 cons_b) wb random_heuristic_improved_consistency in
-  let res_c = improved_consistency bddc (give_depth 16 cons_c) wc random_heuristic_improved_consistency in
-  let res_d = improved_consistency bddd (give_depth 16 cons_d) wd random_heuristic_improved_consistency in
-  Store.add a (res_a,wa) (Store.add b (res_b,wb) (Store.add c (res_c,wc) (Store.add d (res_d,wd) (Store.add e (res_e,we) (Store.add f (res_f,wf) (Store.add g (res_g,wg) (Store.add h (res_h,wh) store))))))), get_modified [a,bdda,res_a;b,bddb,res_b;c,bddc,res_c;d,bddd,res_d;e,bdde,res_e;f,bddf,res_f;g,bddg,res_g;h,bddh,res_h]
+  if res_e == F || res_f == F || res_g == F || res_h == F then Store.add (X(-1,-1,-1)) (F, 1) store, [X(-1,-1,-1)]
+  else begin
+      let t2 = Sys.time() in
+      let cons_a, cons_b, cons_c, cons_d = inverse_mix_column_bdd res_e res_f res_g res_h in (* I use the original bdds instead of the propagated ones because of the possibility of an empty bdd *)
+      time_fun_mc := !time_fun_mc +. Sys.time () -. t2;
+      let res_a = improved_consistency bdda (give_depth (depth bdda) cons_a) wa random_heuristic_improved_consistency in
+      let res_b = improved_consistency bddb (give_depth (depth bddb) cons_b) wb random_heuristic_improved_consistency in
+      let res_c = improved_consistency bddc (give_depth (depth bddc) cons_c) wc random_heuristic_improved_consistency in
+      let res_d = improved_consistency bddd (give_depth (depth bddd) cons_d) wd random_heuristic_improved_consistency in
+      time_mc := !time_mc +. Sys.time () -. t;
+      Store.add a (res_a,wa) (Store.add b (res_b,wb) (Store.add c (res_c,wc) (Store.add d (res_d,wd) (Store.add e (res_e,we) (Store.add f (res_f,wf) (Store.add g (res_g,wg) (Store.add h (res_h,wh) store))))))), get_modified [a,bdda,res_a;b,bddb,res_b;c,bddc,res_c;d,bddd,res_d;e,bdde,res_e;f,bddf,res_f;g,bddg,res_g;h,bddh,res_h] end
 
-let full_propagator_function f inverse a b store =
+let full_propagator_function inverse a b store =
   let bdda, wa = Store.find a store in
   let bddb, wb = Store.find b store in
-  let rec propagate_the_function bdda bddb (todo_a, todo_b) first_execution =
-    let res_a = if todo_a && not (subset bdda f) then improved_consistency bdda f wa random_heuristic_improved_consistency else bdda in
-    let res_b = if todo_b && not (subset bddb inverse) then improved_consistency bddb inverse wa random_heuristic_improved_consistency else bddb in
-    let a_modified, b_modified = bdda != res_a, bddb != res_b in
-    if a_modified || b_modified || first_execution then propagate_between_variables res_a res_b (if first_execution then (true,true) else (b_modified, a_modified)) else res_a, res_b
-  and propagate_between_variables bdda bddb (todo_a, todo_b) =
-    let res_a = if todo_a then improved_consistency_multiple bdda (Bddset.map (fun bdd -> concatenate_bdd bdd (cutted_bdd 8 bddb)) (possible_outputs (complete_bdd 8) bddb)) wa random_heuristic_improved_consistency else bdda in
-    let res_b = if todo_b then improved_consistency_multiple bddb (Bddset.map (fun bdd -> concatenate_bdd bdd (cutted_bdd 8 bdda)) (possible_outputs (complete_bdd 8) bdda)) wb random_heuristic_improved_consistency else bddb in
-    let a_modified, b_modified = bdda != res_a, bddb != res_b in
-    if a_modified || b_modified then propagate_the_function res_a res_b (a_modified, b_modified) false else res_a, res_b in
-  let res_a, res_b = propagate_the_function bdda bddb (true, true) true in
-  Store.add a (res_a,wa) (Store.add b (res_b,wb) store), get_modified [a,bdda,res_a;b,bddb,res_b]
+  let new_out = improved_consistency bddb (concatenate_bdd (complete_bdd 8) bdda) wb random_heuristic_improved_consistency in
+  if new_out != F then begin
+      let res_b = if not (subset new_out inverse) then improved_consistency new_out inverse wb random_heuristic_improved_consistency else new_out in
+      if res_b != F then begin
+          let res_a = improved_consistency_multiple bdda (possible_outputs (complete_bdd 8) res_b) wa random_heuristic_improved_consistency in
+          Store.add a (res_a,wa) (Store.add b (res_b,wb) store), get_modified [a,bdda,res_a;b,bddb,res_b]
+        end
+      else
+        Store.add (X(-1,-1,-1)) (F, 1) store, [X(-1,-1,-1)]
+    end
+  else
+    Store.add (X(-1,-1,-1)) (F, 1) store, [X(-1,-1,-1)]
 
-let full_propagator_sb = full_propagator_function input_output_sbox input_output_inverse_sbox
+let full_propagator_sb = full_propagator_function input_output_inverse_sbox
 
-let full_propagator_psb = full_propagator_function input_output_sbox_proba input_output_inverse_sbox_proba
+let full_propagator_psb = full_propagator_function input_output_inverse_sbox_proba
   
 let propagator_function f inverse a b store =
   let bdda,wa = Store.find a store in
@@ -143,9 +156,9 @@ let propagator_function f inverse a b store =
   let res_a = improved_consistency_multiple bdda (possible_outputs bddb inverse) wa random_heuristic_improved_consistency in
   Store.add a (res_a,wa) (Store.add b (res_b,wb) store), get_modified [a,bdda,res_a;b,bddb,res_b]
   
-let propagator_sb = propagator_function input_output_sbox input_output_inverse_sbox
+(*let propagator_sb = propagator_function input_output_sbox input_output_inverse_sbox *)
                   
-let propagator_psb = propagator_function input_output_sbox_proba input_output_inverse_sbox_proba
+(*let propagator_psb = propagator_function input_output_sbox_proba input_output_inverse_sbox_proba*)
 
                    
 (* The constants are defined on one byte, this propagator is called only once in the initialization of the variable *)
@@ -207,9 +220,8 @@ let rec full_propagation cstrset store cstr_of_var =
   | true -> store
   | false -> let cstr = Cstrset.max_elt cstrset in
              let new_store, modified_vars = propagate cstr store in
-             (*print_endline (string_of_cstr cstr);
-             Store.iter (fun key (elt,w) -> let previous = fst (Store.find key store) in
-                                         if elt != previous then print_endline (key^" previous: "^(string_of_int (cardinal previous)^" new: "^(string_of_int (cardinal elt))))) new_store;*)
+             (*Store.iter (fun key (elt,_) -> let previous = if key = X(-1,-1,-1) then F else fst (Store.find key store) in
+                                            if elt != previous then print_endline ((string_of_var key)^" previous: "^(B.string_of_big_int (cardinal previous))^" new: "^(B.string_of_big_int (cardinal elt))^" depth: "^(string_of_int (depth elt)))) new_store;*)
              if List.exists (fun elt -> is_empty (fst (Store.find elt new_store))) modified_vars then Store.empty else full_propagation (Cstrset.remove cstr (List.fold_left (fun acc elt -> Cstrset.union acc (Store.find elt cstr_of_var)) cstrset modified_vars)) new_store cstr_of_var in
   res
 
@@ -243,7 +255,7 @@ let init_domain cstrset width =
                                     Store.add a (add_or_create a cstr_acc cstr) cstr_acc
       | Iscst(a,_) -> add_list_to_store [a,complete,width] store_acc, cstr_acc
       | ActiveSB(l,_) -> let ws, winverse = Bdd.width input_output_sbox, Bdd.width input_output_inverse_sbox in
-                         List.fold_left (fun (complete_acc, cstr_to_var_acc) (var_in,var_out) -> Store.add var_in (input_output_sbox, ws) (Store.add var_out (input_output_inverse_sbox, winverse) complete_acc), Store.add var_in (add_or_create var_in cstr_to_var_acc cstr) (Store.add var_out (add_or_create var_out cstr_to_var_acc cstr) cstr_to_var_acc)) (store_acc, cstr_acc) l
+                         List.fold_left (fun (complete_acc, cstr_to_var_acc) (var_in,var_out) -> Store.add var_in (complete, ws) (Store.add var_out (input_output_inverse_sbox, winverse) complete_acc), Store.add var_in (add_or_create var_in cstr_to_var_acc cstr) (Store.add var_out (add_or_create var_out cstr_to_var_acc cstr) cstr_to_var_acc)) (store_acc, cstr_acc) l
     ) cstrset (Store.empty, Store.empty)
 
 (* A function that applies the unary constraints, and return a new store and a new constraint set that are not enforces *)
@@ -266,7 +278,7 @@ let store_size store =
 let split_store store _ =
   let _,chosen_sbox_var = List.fold_left
                             (fun (card,key) elt -> let bdd_elt, _ = Store.find elt store in if cardinal bdd_elt > B.unit_big_int then (cardinal bdd_elt,elt) else (card,key)
-                            ) (B.minus_big_int B.unit_big_int,X(-1,-1,-1)) [SX(0,1,1);SX(1,0,0)] in
+                            ) (B.minus_big_int B.unit_big_int,X(-1,-1,-1)) [SX(0,0,1);X(1,0,0);SX(1,0,0)] in
   let (_,chosen_key) = if compare_var chosen_sbox_var (X(-1,-1,-1)) = 0 then Store.fold (fun k (bdd,_) (card,key) -> if cardinal bdd > card then (cardinal bdd,k) else (card,key)) store (B.unit_big_int,X(-1,-1,-1)) else (B.zero_big_int, chosen_sbox_var) in
   let (chosen_bdd,chosen_width) = Store.find chosen_key store in
   let (bdd1,bdd2) = split_backtrack_first chosen_bdd in
@@ -321,21 +333,21 @@ let is_solution cstrset cststore =
   
 let rec backtrack cstrset store acc depth modified_var (cstr_of_var, sbox_vars, cstr_bound, one_cst) =
   if depth < 10 then print_endline ("backtrack"^(string_of_int depth));
-  (*print_endline (B.string_of_big_int (store_size store));*)
   let propagated_store = full_propagation 
                            (match modified_var with
                             | None -> cstrset
-                            | Some _ when depth mod 2 = 3 -> Cstrset.empty
-                            | Some a -> if cardinal (fst (Store.find a store)) = B.unit_big_int then print_endline (string_of_var a);Store.find a cstr_of_var)
+                            | Some _ when depth mod 2 = 1 -> Cstrset.empty
+                            | Some a -> if cardinal (fst (Store.find a store)) = B.unit_big_int then ();Store.find a cstr_of_var)
                            store cstr_of_var in
-  (*print_endline (B.string_of_big_int (store_size propagated_store));*)
-  (*let _ = if depth = 500 then failwith "test" in*)
-  (*Store.iter (fun k (elt,_) -> if cardinal elt > B.unit_big_int then (print_endline k;print_endline (B.string_of_big_int (cardinal elt)))) propagated_store;*)
+  (*print_endline (B.string_of_big_int (store_size store));
+  print_endline (B.string_of_big_int (store_size propagated_store));
+  Store.iter (fun k (elt,_) -> if cardinal elt > B.unit_big_int then (print_endline (string_of_var k);print_endline (B.string_of_big_int (cardinal elt)))) propagated_store;
+  let _ = if depth = 0 then failwith "test" in*)
   match Store.is_empty propagated_store, store_size propagated_store with
   | true, _ -> (*incr one_cst; print_endline (string_of_int !one_cst)*)acc
   | _, n when n = B.unit_big_int -> let cststore = Store.fold (fun key (bdd,_) acc -> Store.add key (int_of_bdd (cutted_bdd 8 bdd)) acc) propagated_store Store.empty in
                                     let is_sol, prob = is_solution cstrset cststore in
-                                      if is_sol then (print_endline ("one_solution"^(string_of_int (List.length acc + 1))); print_endline ("proba = "^(string_of_int prob));cstr_bound := prob + 1;(cststore, prob)::acc) else acc
+                                      if is_sol then (print_endline "one_solution"; print_endline ("proba = "^(string_of_int prob));cstr_bound := prob + 1;(cststore, prob)) else acc
   | _ -> let split_stores, split_var = split_store propagated_store sbox_vars in
          List.fold_left (fun new_acc backtrack_store -> backtrack cstrset backtrack_store new_acc (depth+1) (Some split_var) (cstr_of_var, sbox_vars, cstr_bound, one_cst)) acc split_stores
      

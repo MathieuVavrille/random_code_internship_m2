@@ -80,16 +80,16 @@ let width m = Array.fold_left (fun acc elt ->
 (* Set theoretics, uses caching, and will surely increase the width *)
   
 let intersection =
-  (* The intersection of two bdds. Don't ensure that the bdd have same depth *)
+  (* The intersection of two bdds *)
   let inter_hash = Hashtbl.create 101 in
   let rec aux m m' =
     try Hashtbl.find inter_hash (ref m,ref m')
     with Not_found ->
       let t = match m, m' with
         | F, _ | _, F-> F
-        | T, _ -> m'
-        | _, T -> m
+        | T, T -> T
         | N(a,b), N(c,d) -> bdd_of (aux a c) (aux b d)
+        | _ -> failwith "intersection: the BDDs do not have the same depth"
       in
       Hashtbl.add inter_hash (ref m,ref m') t;
       t
