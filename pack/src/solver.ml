@@ -220,6 +220,8 @@ let rec full_propagation cstrset store cstr_of_var =
   | true -> store
   | false -> let cstr = Cstrset.max_elt cstrset in
              let new_store, modified_vars = propagate cstr store in
+             let dcn = bdd_of_int 209 8 8 in
+             if subset (complete_end 8 (bdd_of_int 93 8 8) ) (fst (Store.find (SX(0,3,3)) store)) && subset dcn (fst (Store.find (X(0,3,3)) store)) && not (subset dcn (fst (Store.find (X(0,3,3)) new_store))) then failwith "error here";
              (*Store.iter (fun key (elt,_) -> let previous = if key = X(-1,-1,-1) then F else fst (Store.find key store) in
                                             if elt != previous then print_endline ((string_of_var key)^" previous: "^(B.string_of_big_int (cardinal previous))^" new: "^(B.string_of_big_int (cardinal elt))^" depth: "^(string_of_int (depth elt)))) new_store;*)
              if List.exists (fun elt -> is_empty (fst (Store.find elt new_store))) modified_vars then Store.empty else full_propagation (Cstrset.remove cstr (List.fold_left (fun acc elt -> Cstrset.union acc (Store.find elt cstr_of_var)) cstrset modified_vars)) new_store cstr_of_var in
