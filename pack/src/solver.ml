@@ -132,11 +132,12 @@ let propagator_mc a b c d e f g h store =
 let full_propagator_function inverse a b store =
   let bdda, wa = Store.find a store in
   let bddb, wb = Store.find b store in
-  let new_out = improved_consistency bddb (concatenate_bdd (complete_bdd 8) bdda) wb random_heuristic_improved_consistency in
+  let new_out = improved_consistency bddb (concatenate_bdd complete8 bdda) wb random_heuristic_improved_consistency in
   if new_out != F then begin
       let res_b = if not (subset new_out inverse) then improved_consistency new_out inverse wb random_heuristic_improved_consistency else new_out in
       if res_b != F then begin
-          let res_a = improved_consistency_multiple bdda (possible_outputs (complete_bdd 8) res_b) wa random_heuristic_improved_consistency in
+          let possible = possible_outputs complete8 res_b in
+          let res_a = improved_consistency_multiple bdda possible wa random_heuristic_improved_consistency in
           Store.add a (res_a,wa) (Store.add b (res_b,wb) store), get_modified [a,bdda,res_a;b,bddb,res_b]
         end
       else
@@ -172,7 +173,7 @@ let propagator_cst i a store =
 let propagator_not_zero a store =
   let bdda,wa = Store.find a store in
   let depth_a = depth bdda in
-  let not_zero = give_depth depth_a (diff (complete_bdd 8) (bdd_of_int 0 8 8)) in
+  let not_zero = give_depth depth_a not_zero_bdd8 in
   let res_a = improved_consistency bdda not_zero wa random_heuristic_improved_consistency in
   if res_a == bdda then store, [] else Store.add a (res_a,wa) store, [a]
 
@@ -188,7 +189,7 @@ let propagator_active_sb l b store =
   let propag = if current_bound = rest_bound then full_propagator_psb else full_propagator_sb in
   let res = if current_bound >= rest_bound then
     List.fold_left
-      (fun (new_store, modified_vars) (var_in, var_out) -> 
+      (fun (new_store, modified_vars) (var_in, var_out) ->
         let propag_store, propag_vars = propag var_in var_out new_store in   
         propag_store, List.append propag_vars modified_vars
       ) (store, []) not_fixed
@@ -220,10 +221,6 @@ let rec full_propagation cstrset store cstr_of_var =
   | true -> store
   | false -> let cstr = Cstrset.max_elt cstrset in
              let new_store, modified_vars = propagate cstr store in
-             let dcn = bdd_of_int 209 8 8 in
-             if subset (complete_end 8 (bdd_of_int 93 8 8) ) (fst (Store.find (SX(0,3,3)) store)) && subset dcn (fst (Store.find (X(0,3,3)) store)) && not (subset dcn (fst (Store.find (X(0,3,3)) new_store))) then failwith "error here";
-             (*Store.iter (fun key (elt,_) -> let previous = if key = X(-1,-1,-1) then F else fst (Store.find key store) in
-                                            if elt != previous then print_endline ((string_of_var key)^" previous: "^(B.string_of_big_int (cardinal previous))^" new: "^(B.string_of_big_int (cardinal elt))^" depth: "^(string_of_int (depth elt)))) new_store;*)
              if List.exists (fun elt -> is_empty (fst (Store.find elt new_store))) modified_vars then Store.empty else full_propagation (Cstrset.remove cstr (List.fold_left (fun acc elt -> Cstrset.union acc (Store.find elt cstr_of_var)) cstrset modified_vars)) new_store cstr_of_var in
   res
 
@@ -246,7 +243,7 @@ let add_list_to_store l store =
                   
 let init_domain cstrset width =
   (* return a couple of (a couple containing the complete store and the map from vars to constraints) and the variables that are in an S-box *)
-  let complete = complete_bdd 8 in
+  let complete = complete8 in
   Cstrset.fold (fun cstr (store_acc,cstr_acc) ->
       match cstr with
       | Xor(a,b,c) -> add_list_to_store [a,complete,width;b,complete,width;c,complete,width] store_acc,
@@ -280,7 +277,7 @@ let store_size store =
 let split_store store _ =
   let _,chosen_sbox_var = List.fold_left
                             (fun (card,key) elt -> let bdd_elt, _ = Store.find elt store in if cardinal bdd_elt > B.unit_big_int then (cardinal bdd_elt,elt) else (card,key)
-                            ) (B.minus_big_int B.unit_big_int,X(-1,-1,-1)) [SX(0,0,1);X(1,0,0);SX(1,0,0)] in
+                            ) (B.minus_big_int B.unit_big_int,X(-1,-1,-1)) [SX(0,2,2);SX(0,3,3);X(1,0,0);SX(0,0,1);SX(1,0,0)] in
   let (_,chosen_key) = if compare_var chosen_sbox_var (X(-1,-1,-1)) = 0 then Store.fold (fun k (bdd,_) (card,key) -> if cardinal bdd > card then (cardinal bdd,k) else (card,key)) store (B.unit_big_int,X(-1,-1,-1)) else (B.zero_big_int, chosen_sbox_var) in
   let (chosen_bdd,chosen_width) = Store.find chosen_key store in
   let (bdd1,bdd2) = split_backtrack_first chosen_bdd in
@@ -341,12 +338,34 @@ let rec backtrack cstrset store acc depth modified_var (cstr_of_var, sbox_vars, 
                             | Some _ when depth mod 2 = 1 -> Cstrset.empty
                             | Some a -> if cardinal (fst (Store.find a store)) = B.unit_big_int then ();Store.find a cstr_of_var)
                            store cstr_of_var in
+  (*let dcn = bdd_of_int 209 8 8 in*)
+  (*if subset (bdd_of_int 24017 16 16) (fst (Store.find (SX(0,3,3)) store)) then print_endline "subset";
+  let test = Store.find (X(0,3,3)) store in
+  print_endline (string_of_list string_of_int (intlist_of_bitvectset (bitvectset_of_bdd (fst test))));
+  print_endline "finished";
+  if Store.is_empty propagated_store then print_endline "store is empty"
+  else begin
+      let test2 = Store.find (X(0,3,3)) propagated_store in
+      print_endline (string_of_list string_of_int (intlist_of_bitvectset (bitvectset_of_bdd (fst test2))));
+      print_endline "finished3";
+      let cst = bdd_of_int 209 8 8 in
+      print_endline "finished2";
+      let _ = subset cst (fst test) in
+      print_endline "fi3";
+    end ;*)
+  (*let test2 = not (subset (bdd_of_int 24017 16 16) (fst (Store.find (SX(0,3,3)) propagated_store))) in
+  print_endline "truc";
+  if test2 && subset (bdd_of_int 24017 16 16) (fst (Store.find (SX(0,3,3)) store)) then failwith "outside 1";*)
+  (*if subset (complete_end 8 (bdd_of_int 93 8 8) ) (cutted_bdd 8 (fst (Store.find (SX(0,3,3)) store))) then print_endline "present";
+  if subset dcn (fst (Store.find (X(0,3,3)) store)) && not (subset dcn (fst (Store.find (X(0,3,3)) propagated_store))) then failwith "error here";*)
   (*print_endline (B.string_of_big_int (store_size store));
   print_endline (B.string_of_big_int (store_size propagated_store));
   Store.iter (fun k (elt,_) -> if cardinal elt > B.unit_big_int then (print_endline (string_of_var k);print_endline (B.string_of_big_int (cardinal elt)))) propagated_store;
   let _ = if depth = 0 then failwith "test" in*)
+  (*print_endline (B.string_of_big_int (store_size propagated_store));*)
   match Store.is_empty propagated_store, store_size propagated_store with
-  | true, _ -> (*incr one_cst; print_endline (string_of_int !one_cst)*)acc
+  | true, _ -> acc
+  | _, n when n = B.zero_big_int -> (*incr one_cst; print_endline (string_of_int !one_cst)*)acc
   | _, n when n = B.unit_big_int -> let cststore = Store.fold (fun key (bdd,_) acc -> Store.add key (int_of_bdd (cutted_bdd 8 bdd)) acc) propagated_store Store.empty in
                                     let is_sol, prob = is_solution cstrset cststore in
                                       if is_sol then (print_endline "one_solution"; print_endline ("proba = "^(string_of_int prob));cstr_bound := prob + 1;(cststore, prob)) else acc

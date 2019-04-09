@@ -130,6 +130,10 @@ let bitvectset_of_bdd =
           res
   in aux
 
+let int_of_bitvect = List.fold_left (fun acc elt -> 2*acc+(if elt then 1 else 0)) 0
+
+let intlist_of_bitvectset bvset = Bvset.fold (fun elt acc -> int_of_bitvect elt::acc) bvset []
+
 let int_of_bdd m =
   let rec aux m acc = match m with
     | T -> acc
@@ -326,3 +330,14 @@ let inter_of_union =
         res in
   aux
           
+
+    (************************************)
+    (* Useful constants or special BDDs *)
+
+let complete8 = complete_bdd 8
+
+let complete16 = complete_bdd 16
+
+let zero_bdd8 = bdd_of_int 0 8 8
+
+let not_zero_bdd8 = diff (complete_bdd 8) (bdd_of_int 0 8 8)
