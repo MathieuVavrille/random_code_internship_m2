@@ -117,12 +117,6 @@ let split_backtrack_optimal_next_width m =
     if !max_val <= nb_merged && (not (Bddset.is_empty b1)) && (not (Bddset.is_empty b2))
     then (max_val := nb_merged; max_depth := i)
   done;
-  (*let nb_merged_array = Array.map2 (fun w (b1, b2) -> 2*w - (Bddset.cardinal b1) - (Bddset.cardinal b2), (b1, b2)) (array_width m) zero_one_at_depth in
-  print_endline (string_of_array (fun (x,(b1, b2)) -> (string_of_int x)^"|"^(string_of_int (Bddset.cardinal b1))^"|"^(string_of_int (Bddset.cardinal b1))) nb_merged_array);
-  let nb_merged_max, depth_opti = Array.fold_left (fun (value, index) (nb_merged, (b1, b2)) -> 
-                                      if value < nb_merged && (not (Bddset.is_empty b1)) && (Bddset.compare b1 (Bddset.singleton F) != 0) && (Bddset.compare b2 (Bddset.singleton F) != 0) then (nb_merged, depth (Bddset.choose b1) + 1) else (value, index)
-                                    ) (-1, -1) nb_merged_array
-  in *)
   if !max_val = -1 then failwith "Can't split the bdd" else split_backtrack_at_depth m (!max_depth)
 
 

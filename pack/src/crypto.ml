@@ -170,6 +170,37 @@ let add_zero_end =
   in aux
 
 
+let gl_double_int x =
+  if x land 128 = 0 then (x lsl 1) land 255 else ((x lsl 1) land 255) lxor 27
+
+let gl_triple_int x =
+  gl_double_int x lxor x
+  
+let mix_column_int x0 x1 x2 x3 =
+  (gl_double_int x0) lxor (gl_triple_int x1) lxor x2 lxor x3,
+  (gl_double_int x1) lxor (gl_triple_int x2) lxor x3 lxor x0,
+  (gl_double_int x2) lxor (gl_triple_int x3) lxor x0 lxor x1,
+  (gl_double_int x3) lxor (gl_triple_int x0) lxor x1 lxor x2
+
+(* We generate some BDDs to cache some computations *)
+(* The BDDs that are generated are the ones where three out of four of the inputs of the MC is equal to zero. The other input is equal to anything in [0,255], like this we can see all the outputs, and do a propagation using the generated BDD (instead of computing the MC on BDDs *)
+let single_zero_mc =
+  let res = [|F;F;F;F|] in
+  for i = 0 to 3 do
+    res.(i) <- try get_from_file ("src/saved_bdd/single_zero_input_"^(string_of_int i)^".bdd")
+               with _ ->
+                 let rec aux n acc =
+                   match n with
+                   | -1 -> acc
+                   | _ -> let x0,x1,x2,x3 = (if i = 0 then n else 0), (if i = 1 then n else 0), (if i = 2 then n else 0), (if i = 3 then n else 0) in
+                          let y0,y1,y2,y3 = mix_column_int x0 x1 x2 x3 in
+                          aux (n-1) (union acc (concatenate_bdd (bdd_of_int n 8 8) (concatenate_bdd (bdd_of_int y0 8 8) (concatenate_bdd (bdd_of_int y1 8 8) (concatenate_bdd (bdd_of_int y2 8 8) (bdd_of_int y3 8 8)))))) in
+                 let computed = aux 255 F in
+                 save_to_file computed ("src/saved_bdd/single_zero_input_"^(string_of_int i)^".bdd");
+                 computed
+  done;
+  res
+
 (* For the two next functions the hashtable is maybe not necessary *)
 let gl_double =
   let computed = Hashtbl.create 101 in
@@ -192,16 +223,17 @@ let gl_triple =
       Hashtbl.add computed (ref m) res;
       res in
   aux
-      
+
 let mix_column_bdd =
   let computed = Hashtbl.create 101 in
   let aux x0 x1 x2 x3 =
     try Hashtbl.find computed (ref x0,ref x1,ref x2,ref x3)
     with Not_found ->
-      let res = bdd_xor (gl_double x0) (bdd_xor (gl_triple x1) (bdd_xor x2 x3)),
-                bdd_xor (gl_double x1) (bdd_xor (gl_triple x2) (bdd_xor x3 x0)),
-                bdd_xor (gl_double x2) (bdd_xor (gl_triple x3) (bdd_xor x0 x1)),
-                bdd_xor (gl_double x3) (bdd_xor (gl_triple x0) (bdd_xor x1 x2)) in
+      let res =
+        bdd_xor (gl_double x0) (bdd_xor (gl_triple x1) (bdd_xor x2 x3)),
+        bdd_xor (gl_double x1) (bdd_xor (gl_triple x2) (bdd_xor x3 x0)),
+        bdd_xor (gl_double x2) (bdd_xor (gl_triple x3) (bdd_xor x0 x1)),
+        bdd_xor (gl_double x3) (bdd_xor (gl_triple x0) (bdd_xor x1 x2)) in
       Hashtbl.add computed (ref x0,ref x1,ref x2,ref x3) res;
       res in
   aux
@@ -239,19 +271,10 @@ let inverse_mix_column_bdd =
                 bdd_xor (gl_fourteen powers_array.(3)) (bdd_xor (gl_eleven powers_array.(0)) (bdd_xor (gl_thirteen powers_array.(1)) (gl_nine powers_array.(2)))) in
       Hashtbl.add computed (ref y0,ref y1,ref y2,ref y3) res;
       res in
-  aux
+  aux                  
 
-let gl_double_int x =
-  if x land 128 = 0 then (x lsl 1) land 255 else ((x lsl 1) land 255) lxor 27
 
-let gl_triple_int x =
-  gl_double_int x lxor x
-  
-let mix_column_int x0 x1 x2 x3 =
-  (gl_double_int x0) lxor (gl_triple_int x1) lxor x2 lxor x3,
-  (gl_double_int x1) lxor (gl_triple_int x2) lxor x3 lxor x0,
-  (gl_double_int x2) lxor (gl_triple_int x3) lxor x0 lxor x1,
-  (gl_double_int x3) lxor (gl_triple_int x0) lxor x1 lxor x2
+
   
 let generate_program r =
   let underscores a b c = string_of_int a^"_"^(string_of_int b)^"_"^(string_of_int c) in

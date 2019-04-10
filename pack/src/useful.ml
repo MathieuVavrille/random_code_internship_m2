@@ -165,18 +165,19 @@ let rec complete_bdd depth = match depth with
   | _ -> let res = complete_bdd (depth-1) in
          bdd_of res res
 
+(* Return the BDD where we keep only the first bits *)
 let cutted_bdd =
   let computed = Hashtbl.create 101 in
   let rec aux wanted_depth m =
     if depth m <= wanted_depth then m else begin
-        try Hashtbl.find computed (ref m)
+        try Hashtbl.find computed (ref m,wanted_depth)
         with Not_found ->
           let res = match wanted_depth, m with
             | _, F -> F
             | 0, _ -> T
             | _, T -> failwith "cutted_bdd: wanted to cut a bdd that is too small"
             | _, N(a,b) -> bdd_of (aux (wanted_depth-1) a) (aux (wanted_depth-1) b) in
-          Hashtbl.add computed (ref m) res;
+          Hashtbl.add computed (ref m, wanted_depth) res;
       res end in
   aux
 

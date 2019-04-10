@@ -22,6 +22,7 @@ let res = main 10000
 let _ = print_endline ("Time in reading the input: "^(string_of_float (!preprocessing_time)))
 let _ = print_endline ("Time in propagator_mc: "^(string_of_float (!time_mc)))
 let _ = print_endline ("->Time in function MC: "^(string_of_float (!time_fun_mc)))
+let _ = print_endline ("->Time in MC with only one active: "^(string_of_float (!time_mc_only_one)))
 let _ = print_endline ("Time in propagator_xor: "^(string_of_float (!time_xor)))
 let _ = print_endline ("Time in propagator_active_sb: "^(string_of_float (!time_active_sb)))
 (*

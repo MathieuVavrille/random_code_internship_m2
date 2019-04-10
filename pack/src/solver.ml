@@ -100,6 +100,7 @@ let propagator_xor a b c store =
 
 let time_mc = ref 0.
 let time_fun_mc = ref 0.
+let time_mc_only_one = ref 0.
 let propagator_mc a b c d e f g h store =
   let t = Sys.time() in
   let bdda,wa = Store.find a store in
@@ -110,25 +111,50 @@ let propagator_mc a b c d e f g h store =
   let bddf,wf = Store.find f store in
   let bddg,wg = Store.find g store in
   let bddh,wh = Store.find h store in
-  let t2 = Sys.time() in
-  let cons_e, cons_f, cons_g, cons_h = mix_column_bdd (cutted_bdd 8 bdda) (cutted_bdd 8 bddb) (cutted_bdd 8 bddc) (cutted_bdd 8 bddd) in
-  time_fun_mc := !time_fun_mc +. Sys.time () -. t2;
-  let res_e = improved_consistency bdde cons_e we random_heuristic_improved_consistency in
-  let res_f = improved_consistency bddf cons_f wf random_heuristic_improved_consistency in
-  let res_g = improved_consistency bddg cons_g wg random_heuristic_improved_consistency in
-  let res_h = improved_consistency bddh cons_h wh random_heuristic_improved_consistency in
-  if res_e == F || res_f == F || res_g == F || res_h == F then Store.add (X(-1,-1,-1)) (F, 1) store, [X(-1,-1,-1)]
-  else begin
-      let t2 = Sys.time() in
-      let cons_a, cons_b, cons_c, cons_d = inverse_mix_column_bdd res_e res_f res_g res_h in (* I use the original bdds instead of the propagated ones because of the possibility of an empty bdd *)
-      time_fun_mc := !time_fun_mc +. Sys.time () -. t2;
-      let res_a = improved_consistency bdda (give_depth (depth bdda) cons_a) wa random_heuristic_improved_consistency in
-      let res_b = improved_consistency bddb (give_depth (depth bddb) cons_b) wb random_heuristic_improved_consistency in
-      let res_c = improved_consistency bddc (give_depth (depth bddc) cons_c) wc random_heuristic_improved_consistency in
-      let res_d = improved_consistency bddd (give_depth (depth bddd) cons_d) wd random_heuristic_improved_consistency in
+  let do_improved = (* Computes the index of the bdd that is not equal zero if there is a unique one, otherwise return -1*)
+    if bdda != zero_bdd8 && bddb == zero_bdd8 && bddc == zero_bdd8 && bddd == zero_bdd8 then 0
+    else
+      if bddb != zero_bdd8 && bdda == zero_bdd8 && bddc == zero_bdd8 && bddd == zero_bdd8 then 1
+      else
+        if bddc != zero_bdd8 && bdda == zero_bdd8 && bddb == zero_bdd8 && bddd == zero_bdd8 then 2
+        else
+          if bddd != zero_bdd8 && bdda == zero_bdd8 && bddb == zero_bdd8 && bddc == zero_bdd8 then 3
+          else -1 in
+  if do_improved == -3 then begin
+      (* First try to see if it works *)
+      let big_res = improved_consistency (concatenate_bdd (cutted_bdd 8 [|bdda;bddb;bddc;bddd|].(do_improved)) (concatenate_bdd bdde (concatenate_bdd bddf (concatenate_bdd bddg bddh)))) single_zero_mc.(do_improved) 255 random_heuristic_improved_consistency in
+      let res_a = if do_improved = 0 then improved_consistency bdda (complete_end 8 (cutted_bdd 8 big_res)) wa random_heuristic_improved_consistency else bdda in
+      let res_b = if do_improved = 1 then improved_consistency bddb (complete_end 8 (cutted_bdd 8 big_res)) wb random_heuristic_improved_consistency else bddb in
+      let res_c = if do_improved = 2 then improved_consistency bddc (complete_end 8 (cutted_bdd 8 big_res)) wc random_heuristic_improved_consistency else bddc in
+      let res_d = if do_improved = 3 then improved_consistency bddd (complete_end 8 (cutted_bdd 8 big_res)) wd random_heuristic_improved_consistency else bddd in
+      let res_e = improved_consistency_multiple bdde (possible_outputs complete8 (cutted_bdd 16 big_res)) we random_heuristic_improved_consistency in
+      let res_f = improved_consistency_multiple bddf (possible_outputs complete16 (cutted_bdd 24 big_res)) wf random_heuristic_improved_consistency in
+      let res_g = improved_consistency_multiple bddg (possible_outputs (complete_bdd 24) (cutted_bdd 32 big_res)) wg random_heuristic_improved_consistency in
+      let res_h = improved_consistency_multiple bddh (possible_outputs (complete_bdd 32) big_res) wh random_heuristic_improved_consistency in
+      time_mc_only_one := !time_mc_only_one +. Sys.time () -. t;
       time_mc := !time_mc +. Sys.time () -. t;
       Store.add a (res_a,wa) (Store.add b (res_b,wb) (Store.add c (res_c,wc) (Store.add d (res_d,wd) (Store.add e (res_e,we) (Store.add f (res_f,wf) (Store.add g (res_g,wg) (Store.add h (res_h,wh) store))))))), get_modified [a,bdda,res_a;b,bddb,res_b;c,bddc,res_c;d,bddd,res_d;e,bdde,res_e;f,bddf,res_f;g,bddg,res_g;h,bddh,res_h] end
+  else begin
+      let t2 = Sys.time() in
+      let cons_e, cons_f, cons_g, cons_h = mix_column_bdd (cutted_bdd 8 bdda) (cutted_bdd 8 bddb) (cutted_bdd 8 bddc) (cutted_bdd 8 bddd) in
+      if do_improved != -1 then time_fun_mc := !time_fun_mc +. Sys.time () -. t2;
+      let res_e = improved_consistency bdde cons_e we random_heuristic_improved_consistency in
+      let res_f = improved_consistency bddf cons_f wf random_heuristic_improved_consistency in
+      let res_g = improved_consistency bddg cons_g wg random_heuristic_improved_consistency in
+      let res_h = improved_consistency bddh cons_h wh random_heuristic_improved_consistency in
+      if res_e == F || res_f == F || res_g == F || res_h == F then Store.add (X(-1,-1,-1)) (F, 1) store, [X(-1,-1,-1)]
+      else begin
+          let t2 = Sys.time() in
+          let cons_a, cons_b, cons_c, cons_d = inverse_mix_column_bdd res_e res_f res_g res_h in (* I use the original bdds instead of the propagated ones because of the possibility of an empty bdd *)
+          time_fun_mc := !time_fun_mc +. Sys.time () -. t2;
+          let res_a = improved_consistency bdda (give_depth (depth bdda) cons_a) wa random_heuristic_improved_consistency in
+          let res_b = improved_consistency bddb (give_depth (depth bddb) cons_b) wb random_heuristic_improved_consistency in
+          let res_c = improved_consistency bddc (give_depth (depth bddc) cons_c) wc random_heuristic_improved_consistency in
+          let res_d = improved_consistency bddd (give_depth (depth bddd) cons_d) wd random_heuristic_improved_consistency in
+          time_mc := !time_mc +. Sys.time () -. t;
+          Store.add a (res_a,wa) (Store.add b (res_b,wb) (Store.add c (res_c,wc) (Store.add d (res_d,wd) (Store.add e (res_e,we) (Store.add f (res_f,wf) (Store.add g (res_g,wg) (Store.add h (res_h,wh) store))))))), get_modified [a,bdda,res_a;b,bddb,res_b;c,bddc,res_c;d,bddd,res_d;e,bdde,res_e;f,bddf,res_f;g,bddg,res_g;h,bddh,res_h] end end
 
+  
 let full_propagator_function inverse a b store =
   let bdda, wa = Store.find a store in
   let bddb, wb = Store.find b store in
@@ -277,7 +303,11 @@ let store_size store =
 let split_store store _ =
   let _,chosen_sbox_var = List.fold_left
                             (fun (card,key) elt -> let bdd_elt, _ = Store.find elt store in if cardinal bdd_elt > B.unit_big_int then (cardinal bdd_elt,elt) else (card,key)
-                            ) (B.minus_big_int B.unit_big_int,X(-1,-1,-1)) [SX(0,2,2);SX(0,3,3);X(1,0,0);SX(0,0,1);SX(1,0,0)] in
+                            ) (B.unit_big_int,X(-1,-1,-1)) [SX(0,0,1);X(1,0,0);SX(1,0,0)] in
+  let _, chosen_sbox_var = if compare_var chosen_sbox_var (X(-1,-1,-1)) = 0 then
+                             List.fold_left
+                               (fun (card,key) elt -> let bdd_elt, _ = Store.find elt store in if cardinal bdd_elt > B.unit_big_int then (cardinal bdd_elt,elt) else (card,key)
+                               ) (B.minus_big_int B.unit_big_int,X(-1,-1,-1)) [SX(0,2,2);SX(0,3,3);X(1,0,0);X(0,0,1)] else B.zero_big_int, chosen_sbox_var in
   let (_,chosen_key) = if compare_var chosen_sbox_var (X(-1,-1,-1)) = 0 then Store.fold (fun k (bdd,_) (card,key) -> if cardinal bdd > card then (cardinal bdd,k) else (card,key)) store (B.unit_big_int,X(-1,-1,-1)) else (B.zero_big_int, chosen_sbox_var) in
   let (chosen_bdd,chosen_width) = Store.find chosen_key store in
   let (bdd1,bdd2) = split_backtrack_first chosen_bdd in
@@ -331,38 +361,15 @@ let is_solution cstrset cststore =
   Cstrset.fold (fun cstr (b_acc, prob_acc) -> if b_acc then (let b, prob = is_solution_cstr cstr cststore in b, prob + prob_acc) else b_acc, 0) cstrset (true, 0)
   
 let rec backtrack cstrset store acc depth modified_var (cstr_of_var, sbox_vars, cstr_bound, one_cst) =
-  if depth < 10 then print_endline ("backtrack"^(string_of_int depth));
+  if depth < 5 then print_endline ("backtrack"^(string_of_int depth));
   let propagated_store = full_propagation 
                            (match modified_var with
                             | None -> cstrset
                             | Some _ when depth mod 2 = 1 -> Cstrset.empty
                             | Some a -> if cardinal (fst (Store.find a store)) = B.unit_big_int then ();Store.find a cstr_of_var)
                            store cstr_of_var in
-  (*let dcn = bdd_of_int 209 8 8 in*)
-  (*if subset (bdd_of_int 24017 16 16) (fst (Store.find (SX(0,3,3)) store)) then print_endline "subset";
-  let test = Store.find (X(0,3,3)) store in
-  print_endline (string_of_list string_of_int (intlist_of_bitvectset (bitvectset_of_bdd (fst test))));
-  print_endline "finished";
-  if Store.is_empty propagated_store then print_endline "store is empty"
-  else begin
-      let test2 = Store.find (X(0,3,3)) propagated_store in
-      print_endline (string_of_list string_of_int (intlist_of_bitvectset (bitvectset_of_bdd (fst test2))));
-      print_endline "finished3";
-      let cst = bdd_of_int 209 8 8 in
-      print_endline "finished2";
-      let _ = subset cst (fst test) in
-      print_endline "fi3";
-    end ;*)
-  (*let test2 = not (subset (bdd_of_int 24017 16 16) (fst (Store.find (SX(0,3,3)) propagated_store))) in
-  print_endline "truc";
-  if test2 && subset (bdd_of_int 24017 16 16) (fst (Store.find (SX(0,3,3)) store)) then failwith "outside 1";*)
-  (*if subset (complete_end 8 (bdd_of_int 93 8 8) ) (cutted_bdd 8 (fst (Store.find (SX(0,3,3)) store))) then print_endline "present";
-  if subset dcn (fst (Store.find (X(0,3,3)) store)) && not (subset dcn (fst (Store.find (X(0,3,3)) propagated_store))) then failwith "error here";*)
-  (*print_endline (B.string_of_big_int (store_size store));
-  print_endline (B.string_of_big_int (store_size propagated_store));
-  Store.iter (fun k (elt,_) -> if cardinal elt > B.unit_big_int then (print_endline (string_of_var k);print_endline (B.string_of_big_int (cardinal elt)))) propagated_store;
-  let _ = if depth = 0 then failwith "test" in*)
   (*print_endline (B.string_of_big_int (store_size propagated_store));*)
+  (*Store.iter (fun k (bdd,_) -> if cardinal bdd > B.unit_big_int then print_endline ((string_of_var k)^" "^(B.string_of_big_int (cardinal bdd)))) propagated_store;*)
   match Store.is_empty propagated_store, store_size propagated_store with
   | true, _ -> acc
   | _, n when n = B.zero_big_int -> (*incr one_cst; print_endline (string_of_int !one_cst)*)acc
