@@ -20,6 +20,7 @@ rule token = parse    (* la "fonction" aussi s'appelle token *)
   | "MC" 		      { MC }
   | "CST" 		      { CST }
   | "x_" 		      { XUNDER }
+  | "xinit_"		      { XINIT }
   | "sx_" 		      { SXUNDER }
   | "k_" 		      { KUNDER }
   | "sk_" 		      { SKUNDER }

@@ -1,7 +1,11 @@
 open Useful
 open Bdd
+
+(*******************************************************)
+(* Computation of the S-box functions, arrays and BDDs *)
    
 let sbox_hex =
+  (* The first dimension of the array are the 4 higher bits of the input, the second dimension are the 4 lower bits *)
   [|[| "63"; "7C"; "77";"7B";"F2";"6B";"6F";"C5";"30";"01";"67";"2B";"FE";"D7";"AB";"76"|];
     [| "CA"; "82"; "C9";"7D";"FA";"59";"47";"F0";"AD";"D4";"A2";"AF";"9C";"A4";"72";"C0"|];
     [| "B7";"FD";"93";"26";"36";"3F";"F7";"CC";"34";"A5";"E5";"F1";"71";"D8";"31";"15"|];
@@ -18,27 +22,11 @@ let sbox_hex =
     [| "70";"3E";"B5";"66";"48";"03";"F6";"0E";"61";"35";"57";"B9";"86";"C1";"1D";"9E"|];
     [| "E1";"F8";"98";"11";"69";"D9";"8E";"94";"9B";"1E";"87";"E9";"CE";"55";"28";"DF"|];
     [| "8C";"A1";"89";"0D";"BF";"E6";"42";"68";"41";"99";"2D";"0F";"B0";"54";"BB";"16"|]|]
-
-let test = [|[|99; 124; 119; 123; 242; 107; 111; 197;  48;   1; 103;  43; 254; 215; 171; 118|]; 
-	     [|202; 130; 201; 125; 250;  89;  71; 240; 173; 212; 162; 175; 156; 164; 114; 192|];
-	     [|183; 253; 147;  38;  54;  63; 247; 204;  52; 165; 229; 241; 113; 216;  49;  21|]; 
-	     [|4; 199;  35; 195;  24; 150;   5; 154;   7;  18; 128; 226; 235;  39; 178; 117|]; 
-	     [|9; 131;  44;  26;  27; 110;  90; 160;  82;  59; 214; 179;  41; 227;  47; 132|]; 
-	     [|83; 209;   0; 237;  32; 252; 177;  91; 106; 203; 190;  57;  74;  76;  88; 207|]; 
-	     [|208; 239; 170; 251;  67;  77;  51; 133;  69; 249;   2; 127;  80;  60; 159; 168|]; 
-	     [|81; 163;  64; 143; 146; 157;  56; 245; 188; 182; 218;  33;  16; 255; 243; 210|]; 
-	     [|205;  12;  19; 236;  95; 151;  68;  23; 196; 167; 126;  61; 100;  93;  25; 115|]; 
-	     [|96; 129;  79; 220;  34;  42; 144; 136;  70; 238; 184;  20; 222;  94;  11; 219|]; 
-	     [|224;  50;  58;  10;  73;   6;  36;  92; 194; 211; 172;  98; 145; 149; 228; 121|]; 
-	     [|231; 200;  55; 109; 141; 213;  78; 169; 108;  86; 244; 234; 101; 122; 174;   8|]; 
-	     [|186; 120;  37;  46;  28; 166; 180; 198; 232; 221; 116;  31;  75; 189; 139; 138|]; 
-	     [|112;  62; 181; 102;  72;   3; 246;  14;  97;  53;  87; 185; 134; 193;  29; 158|]; 
-	     [|225; 248; 152;  17; 105; 217; 142; 148; 155;  30; 135; 233; 206;  85;  40; 223|]; 
-	     [|140; 161; 137;  13; 191; 230;  66; 104;  65; 153;  45;  15; 176;  84; 187;  22|]|]
          
 module Chmap = Map.Make(Char)
              
 let int_of_hex =
+  (* Conversion function from hex character to int *)
   let conversion = Chmap.add 'A' 10 (Chmap.add 'B' 11 (Chmap.add 'C' 12 (Chmap.add 'D' 13 (Chmap.add 'E' 14 (Chmap.add 'F' 15 Chmap.empty))))) in
   let rec aux n map = match n with
     | -1 -> map
@@ -46,6 +34,7 @@ let int_of_hex =
   in aux 9 conversion
 
 let int_of_hexstring s =
+  (* Return the integer represented by a hexadecimal string *)
   let res = ref 0 in
   for i=0 to String.length s - 1 do
     res := try Chmap.find s.[i] int_of_hex + 16 * !res with Not_found -> print_string (Char.escaped s.[i]); failwith "test";
@@ -53,17 +42,21 @@ let int_of_hexstring s =
   !res
   
 let sbox =
+  (* The array of the outputs of the S-box in integers *)
   Array.init 256 (fun i -> int_of_hexstring sbox_hex.(i lsr 4).(i land 15))
   
 let inverse_sbox =
+  (* The inverse function of the S-box, computed using the previous array *)
   let inverse = Array.make 256 0 in
   Array.iteri (fun i elt -> inverse.(elt) <- i) sbox;
   inverse
       
 let sbox_fun x =
+  (* The S-box as a function *)
   sbox.(x)
 
 let array_diff_sbox_outputs =
+  (* The array giving for each differtial byte the set of possible outputs *)
   let res = Array.make 256 Intset.empty in
   for i=0 to 255 do
     for j=0 to 255 do
@@ -73,7 +66,7 @@ let array_diff_sbox_outputs =
   res
   
 let input_output_bdd output_fun =
-  (* return a bdd where the values are \delta X \concat \delta Y *)
+  (* return a bdd where the values are X \concat Y where Y = output_fun(X) *)
   let rec aux n set =
     let rec aux2 m set2 = match m with
       | -1 -> set2
@@ -87,12 +80,14 @@ let input_output_bdd output_fun =
   bdd_of_bitvectset (aux 255 Bvset.empty)
 
 let input_output_sbox =
+  (* The BDD of the S-box *)
   try get_from_file "src/saved_bdd/input_output_sbox.bdd"
   with _ -> let res = input_output_bdd sbox in
             save_to_file res "src/saved_bdd/input_output_sbox.bdd";
             res
             
 let input_output_inverse_sbox = 
+  (* The BDD of the inverse S-box *)
   try get_from_file "src/saved_bdd/input_output_inverse_sbox.bdd"
   with _ -> let res = input_output_bdd inverse_sbox in
             save_to_file res "src/saved_bdd/input_output_inverse_sbox.bdd";
@@ -100,7 +95,7 @@ let input_output_inverse_sbox =
 
                               
 let probaS a b =
-  (* Probability that inputing a in the differential s-box gives b *)
+  (* Logarithm of the probability that inputing a in the differential s-box gives b *)
   let count = ref (-16) in
   for i=0 to 255 do
     if sbox.(i) lxor sbox.(i lxor a) = b then incr count
@@ -108,52 +103,50 @@ let probaS a b =
     !count/2
 
 let input_output_sbox_proba =
+  (* return the bdd representing the S-box where the probability is 2^-6 *)
   try get_from_file "src/saved_bdd/input_output_sbox_proba.bdd"
-  with _ -> let res =
-              (* return a bdd where the values are \delta X \concat \delta Y *)
-              let rec aux n set =
-                let rec aux2 m set2 =
-                  match m with
-                  | -1 -> set2
-                  | _ -> let res = (n lsl 8) lor m in
-                         aux2 (m-1) (if probaS n m = -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
-                in
-                match n with
-                | -1 -> set
-                | _ -> aux (n-1) (aux2 255 set)
-              in
-              bdd_of_bitvectset (aux 255 Bvset.empty) in
-            save_to_file res "src/saved_bdd/input_output_sbox_proba.bdd";
-            res
-  
+  with _ ->
+    let res =
+      let rec aux n set =
+        let rec aux2 m set2 =
+          match m with
+          | -1 -> set2
+          | _ -> let res = (n lsl 8) lor m in
+                 aux2 (m-1) (if probaS n m = -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
+        in
+        match n with
+        | -1 -> set
+        | _ -> aux (n-1) (aux2 255 set)
+      in
+      bdd_of_bitvectset (aux 255 Bvset.empty) in
+    save_to_file res "src/saved_bdd/input_output_sbox_proba.bdd";
+    res
+    
 let input_output_inverse_sbox_proba = 
+  (* return the bdd representing the inverse S-box where the probability is 2^-6 *)
   try get_from_file "src/saved_bdd/input_output_inverse_sbox_proba.bdd"
-  with _ -> let res =
-              (* return a bdd where the values are \delta X \concat \delta Y *)
-              let rec aux n set =
-                let rec aux2 m set2 =
-                  match m with
-                  | -1 -> set2
-                  | _ -> let res = (m lsl 8) lor n in
-                         aux2 (m-1) (if probaS n m >= -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
-                in
-                match n with
-                | -1 -> set
-                | _ -> aux (n-1) (aux2 255 set)
-              in
-              bdd_of_bitvectset (aux 255 Bvset.empty) in
-            save_to_file res "src/saved_bdd/input_output_inverse_sbox_proba.bdd";
-            res
+  with _ ->
+    let res =
+      let rec aux n set =
+        let rec aux2 m set2 =
+          match m with
+          | -1 -> set2
+          | _ -> let res = (m lsl 8) lor n in
+                 aux2 (m-1) (if probaS n m >= -6 then Bvset.add (bitvect_of_int res 16) set2 else set2)
+        in
+        match n with
+        | -1 -> set
+        | _ -> aux (n-1) (aux2 255 set)
+      in
+      bdd_of_bitvectset (aux 255 Bvset.empty) in
+    save_to_file res "src/saved_bdd/input_output_inverse_sbox_proba.bdd";
+    res
 
-let possible_outputs m bdd_fun =
-  let rec aux m current_bdd_fun acc = match m,current_bdd_fun with
-    | F,_ | _, F -> acc
-    | T, _ -> Bddset.add current_bdd_fun acc
-    | N(a,b), N(c,d) -> aux a c (aux b d acc)
-    | N _, _ -> failwith "possible_outputs: the bdd_fun is not big enough"
-  in
-  aux m bdd_fun Bddset.empty
-  
+
+
+(******************************************)
+(* Computation of the Mix column function *)
+    
 let add_zero_end =
   let last = bdd_of T F in
   let computed = Hashtbl.create 101 in
@@ -229,16 +222,19 @@ let mix_column_bdd =
   let aux x0 x1 x2 x3 =
     try Hashtbl.find computed (ref x0,ref x1,ref x2,ref x3)
     with Not_found ->
+      let double_array = Array.map (fun x -> gl_double x) [|x0; x1; x2; x3|] in
+      let xor_01 = bdd_xor x0 x1 in
+      let xor_23 = bdd_xor x2 x3 in
       let res =
-        bdd_xor (gl_double x0) (bdd_xor (gl_triple x1) (bdd_xor x2 x3)),
-        bdd_xor (gl_double x1) (bdd_xor (gl_triple x2) (bdd_xor x3 x0)),
-        bdd_xor (gl_double x2) (bdd_xor (gl_triple x3) (bdd_xor x0 x1)),
-        bdd_xor (gl_double x3) (bdd_xor (gl_triple x0) (bdd_xor x1 x2)) in
+        bdd_xor (double_array.(0)) (bdd_xor (double_array.(1)) (bdd_xor x1 xor_23)),
+        bdd_xor (double_array.(1)) (bdd_xor (double_array.(2)) (bdd_xor x0 xor_23)),
+        bdd_xor (double_array.(2)) (bdd_xor (double_array.(3)) (bdd_xor x3 xor_01)),
+        bdd_xor (double_array.(3)) (bdd_xor (double_array.(0)) (bdd_xor x2 xor_01)) in
       Hashtbl.add computed (ref x0,ref x1,ref x2,ref x3) res;
       res in
   aux
     
-let gl_nine powers =
+(*let gl_nine powers =
   bdd_xor powers.(0) powers.(3)
 
 let gl_eleven powers =
@@ -248,7 +244,19 @@ let gl_thirteen powers =
   bdd_xor powers.(0) (bdd_xor powers.(2) powers.(3))
 
 let gl_fourteen powers =
-  bdd_xor powers.(1) (bdd_xor powers.(2) powers.(3))
+  bdd_xor powers.(1) (bdd_xor powers.(2) powers.(3))*)
+
+  
+let gl_nine powers = powers.(0)
+
+let gl_eleven powers =
+  bdd_xor powers.(0) powers.(1)
+
+let gl_thirteen powers =
+  bdd_xor powers.(0) powers.(2)
+                    
+let gl_fourteen powers =
+  bdd_xor powers.(1) powers.(2)
   
 let inverse_mix_column_bdd =
   let computed = Hashtbl.create 101 in
@@ -265,10 +273,11 @@ let inverse_mix_column_bdd =
           powers_array.(j).(i) <- gl_double (powers_array.(j).(i-1));
         done
       done;
-      let res = bdd_xor (gl_fourteen powers_array.(0)) (bdd_xor (gl_eleven powers_array.(1)) (bdd_xor (gl_thirteen powers_array.(2)) (gl_nine powers_array.(3)))),
-                bdd_xor (gl_fourteen powers_array.(1)) (bdd_xor (gl_eleven powers_array.(2)) (bdd_xor (gl_thirteen powers_array.(3)) (gl_nine powers_array.(0)))),
-                bdd_xor (gl_fourteen powers_array.(2)) (bdd_xor (gl_eleven powers_array.(3)) (bdd_xor (gl_thirteen powers_array.(0)) (gl_nine powers_array.(1)))),
-                bdd_xor (gl_fourteen powers_array.(3)) (bdd_xor (gl_eleven powers_array.(0)) (bdd_xor (gl_thirteen powers_array.(1)) (gl_nine powers_array.(2)))) in
+      let all_eight = bdd_xor powers_array.(0).(3) (bdd_xor powers_array.(1).(3) (bdd_xor powers_array.(2).(3) powers_array.(3).(3))) in
+      let res = bdd_xor all_eight (bdd_xor (gl_fourteen powers_array.(0)) (bdd_xor (gl_eleven powers_array.(1)) (bdd_xor (gl_thirteen powers_array.(2)) (gl_nine powers_array.(3))))),
+                bdd_xor all_eight (bdd_xor (gl_fourteen powers_array.(1)) (bdd_xor (gl_eleven powers_array.(2)) (bdd_xor (gl_thirteen powers_array.(3)) (gl_nine powers_array.(0))))),
+                bdd_xor all_eight (bdd_xor (gl_fourteen powers_array.(2)) (bdd_xor (gl_eleven powers_array.(3)) (bdd_xor (gl_thirteen powers_array.(0)) (gl_nine powers_array.(1))))),
+                bdd_xor all_eight (bdd_xor (gl_fourteen powers_array.(3)) (bdd_xor (gl_eleven powers_array.(0)) (bdd_xor (gl_thirteen powers_array.(1)) (gl_nine powers_array.(2))))) in
       Hashtbl.add computed (ref y0,ref y1,ref y2,ref y3) res;
       res in
   aux                  

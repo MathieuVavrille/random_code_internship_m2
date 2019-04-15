@@ -11,7 +11,7 @@
 %token COMMA SEMIC
 %token LPAREN RPAREN UNDER
 %token ZERO NOTZERO
-%token XUNDER SXUNDER KUNDER SKUNDER ZUNDER
+%token XUNDER XINIT SXUNDER KUNDER SKUNDER ZUNDER
 %token END
 
 
@@ -37,9 +37,10 @@ cstr:
 
 
 variable:
-  | XUNDER INT UNDER INT UNDER INT { X($2,$4,$6) }
-  | SXUNDER INT UNDER INT UNDER INT { SX($2,$4,$6) }
-  | KUNDER INT UNDER INT UNDER INT { K($2,$4,$6) }
-  | SKUNDER INT UNDER INT UNDER INT { if $6 = 3 then SK($2,$4) else failwith "The sbox key is not on third column" }
-  | ZUNDER INT UNDER INT UNDER INT { Z($2,$4,$6) }
+  | XUNDER INT UNDER INT UNDER INT     { X($2,$4,$6) }
+  | XINIT INT UNDER INT                { X(-1,$2,$4) }
+  | SXUNDER INT UNDER INT UNDER INT    { SX($2,$4,$6) }
+  | KUNDER INT UNDER INT UNDER INT     { K($2,$4,$6) }
+  | SKUNDER INT UNDER INT UNDER INT    { if $6 = 3 then SK($2,$4) else failwith "The sbox key is not on third column" }
+  | ZUNDER INT UNDER INT UNDER INT     { Z($2,$4,$6) }
 ;

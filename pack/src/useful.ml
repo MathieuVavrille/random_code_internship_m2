@@ -159,6 +159,19 @@ let random_set max =
   in
   aux Bvset.empty (pow 2 max)
 
+
+
+(***********************************************************)
+(* Functions to cut BDDs, extend them, or concatenate them *)
+            
+let possible_outputs m bdd_fun =
+  let rec aux m current_bdd_fun acc = match m,current_bdd_fun with
+    | F,_ | _, F -> acc
+    | T, _ -> Bddset.add current_bdd_fun acc
+    | N(a,b), N(c,d) -> aux a c (aux b d acc)
+    | N _, _ -> failwith "possible_outputs: the bdd_fun is not big enough"
+  in
+  aux m bdd_fun Bddset.empty
   
 let rec complete_bdd depth = match depth with
   | 0 -> T
@@ -182,18 +195,18 @@ let cutted_bdd =
   aux
 
 (* Return the bdd representing the concatenation of the two bdds *)
-let concatenate_bdd m m' = 
+let concatenate_bdd = 
   let computed = Hashtbl.create 101 in
-  let rec aux m =
-    try Hashtbl.find computed (ref m)
+  let rec aux m m' =
+    try Hashtbl.find computed (ref m, ref m')
     with Not_found ->
       let res = match m with
         | T -> m'
         | F -> F
-        | N(a,b) -> bdd_of (aux a) (aux b) in
-      Hashtbl.add computed (ref m) res;
+        | N(a,b) -> bdd_of (aux a m') (aux b m') in
+      Hashtbl.add computed (ref m, ref m') res;
       res in
-  aux m
+  aux
 
 let complete_end depth m =
   let full_bdd = complete_bdd depth in
@@ -305,7 +318,7 @@ let inter_of_union =
     (* Take a bddset as input and return two bdds: one with all the 0-subtrees, and the other with all the 1-subtrees *) 
     Bddset.fold (fun elt (zeroacc, oneacc) ->
         match elt with
-        | T -> failwith "split_zero_one_improved_cons_mult: not the same size"
+        | T -> failwith "split_zero_one_inter_with_union: not the same size"
         | F -> (zeroacc, oneacc)
         | N(F,F) -> failwith "inter_with_union : N(F,F) should be equal to F"
         | N(F,c) -> (zeroacc, Bddset.add c oneacc)
@@ -316,19 +329,17 @@ let inter_of_union =
   let rec aux bdd bdds =
     try Bddsmap.find bdds (Hashtbl.find computed (ref bdd))
     with Not_found ->
-      try Bddsmap.find bdds (Hashtbl.find computed (ref bdd))
-      with Not_found -> 
-        let res = match bdd, Bddset.is_empty bdds with
-          | F, _ | _, true -> F
-          | T, false -> T 
-          | N(a,b), false -> 
-             let zero, one = split_zero_one bdds in
-             bdd_of (aux a zero) (aux b one)
-        in
-        (* add the element in the table *)
-        Hashtbl.add computed (ref bdd) (try Bddsmap.add bdds res (Hashtbl.find computed (ref bdd))
-                                with Not_found -> Bddsmap.singleton bdds res);
-        res in
+      let res = match bdd, Bddset.is_empty bdds with
+        | F, _ | _, true -> F
+        | T, false -> T 
+        | N(a,b), false -> 
+           let zero, one = split_zero_one bdds in
+           bdd_of (aux a zero) (aux b one)
+      in
+      (* add the element in the table *)
+      Hashtbl.add computed (ref bdd) (try Bddsmap.add bdds res (Hashtbl.find computed (ref bdd))
+                                      with Not_found -> Bddsmap.singleton bdds res);
+      res in
   aux
           
 
@@ -340,5 +351,7 @@ let complete8 = complete_bdd 8
 let complete16 = complete_bdd 16
 
 let zero_bdd8 = bdd_of_int 0 8 8
+              
+let zero_bdd16 = bdd_of_int 0 16 16
 
 let not_zero_bdd8 = diff (complete_bdd 8) (bdd_of_int 0 8 8)

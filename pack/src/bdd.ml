@@ -10,9 +10,13 @@ let main_hash = Hashtbl.create 101
 let _ = Hashtbl.add main_hash (ref F,ref F) F
 
 (* One should never use the N constructor but this one instead (to ensure maximal sharing) *)
-let bdd_of a b =
-  try Hashtbl.find main_hash (ref a,ref b)
-  with Not_found -> let t = N(a,b) in Hashtbl.add main_hash (ref a,ref b) t; t
+let bdd_of =
+  let main_hash = Hashtbl.create 101 in
+  Hashtbl.add main_hash (ref F,ref F) F;
+  let aux a b = 
+    try Hashtbl.find main_hash (ref a,ref b)
+    with Not_found -> let t = N(a,b) in Hashtbl.add main_hash (ref a,ref b) t; t in
+  aux
 
 (* Now that we ensure structural equality, we can use it *)
 let bdd_compare m1 m2 = Pervasives.compare (ref m1) (ref m2)
