@@ -31,7 +31,7 @@ let compare_var v1 v2 = match v1, v2 with
 
 module Store = Map.Make(struct type t = var let compare = compare_var end)
 
-             module Varset = Set.Make(struct type t = var let compare = compare_var end)
+module Varset = Set.Make(struct type t = var let compare = compare_var end)
 
 let string_of_var v = match v with
   | X(a,b,c) -> "x_"^(string_of_int a)^"_"^(string_of_int b)^"_"^(string_of_int c)
@@ -259,6 +259,8 @@ let rec full_propagation cstrset store cstr_of_var =
   | true -> store
   | false -> let cstr = Cstrset.max_elt cstrset in
              let new_store, modified_vars = propagate cstr store in
+             (*print_endline (string_of_cstr cstr);
+             List.iter (fun elt -> print_endline (string_of_var elt^" "^(B.string_of_big_int (cardinal (fst (Store.find elt store))))^" "^(B.string_of_big_int (cardinal (fst (Store.find elt new_store)))))) modified_vars;*)
              if List.exists (fun elt -> is_empty (fst (Store.find elt new_store))) modified_vars then Store.empty else full_propagation (Cstrset.remove cstr (List.fold_left (fun acc elt -> Cstrset.union acc (Store.find elt cstr_of_var)) cstrset modified_vars)) new_store cstr_of_var in
   res
 
@@ -315,7 +317,7 @@ let store_size store =
 let split_store store sbox_vars =
   let _,chosen_sbox_var = List.fold_left
                             (fun (card,key) elt -> let bdd_elt, _ = Store.find elt store in if List.mem elt sbox_vars && cardinal bdd_elt > B.unit_big_int then (cardinal bdd_elt,elt) else (card,key)
-                            ) (B.unit_big_int,X(-1,-1,-1)) [SX(0,1,1);X(1,1,1);SX(1,1,1)] in
+                            ) (B.unit_big_int,X(-1,-1,-1)) [X(1,1,1);SX(1,1,1);X(0,1,3);SX(0,1,3);X(1,1,2);SX(1,1,2);X(2,1,1);SX(2,1,1)] in
   let _, chosen_sbox_var = if compare_var chosen_sbox_var (X(-1,-1,-1)) = 0 then
                              List.fold_left
                                (fun (card,key) elt -> let bdd_elt, _ = Store.find elt store in if cardinal bdd_elt > B.unit_big_int then (cardinal bdd_elt,elt) else (card,key)
@@ -373,7 +375,7 @@ let is_solution cstrset cststore =
   Cstrset.fold (fun cstr (b_acc, prob_acc) -> if b_acc then (let b, prob = is_solution_cstr cstr cststore in b, prob + prob_acc) else b_acc, 0) cstrset (true, 0)
   
 let rec backtrack cstrset store acc depth modified_var (cstr_of_var, sbox_vars, cstr_bound, one_cst) =
-  if depth < 3 then print_endline ("backtrack"^(string_of_int depth));
+  if depth < 6 then print_endline ("backtrack"^(string_of_int depth));
   let propagated_store = full_propagation 
                            (match modified_var with
                             | None -> cstrset
@@ -391,7 +393,6 @@ let rec backtrack cstrset store acc depth modified_var (cstr_of_var, sbox_vars, 
   | _ -> let split_stores, split_var = split_store propagated_store sbox_vars in
          List.fold_left (fun new_acc backtrack_store -> backtrack cstrset backtrack_store new_acc (depth+1) (Some split_var) (cstr_of_var, sbox_vars, cstr_bound, one_cst)) acc split_stores
      
-  
 
 
 
