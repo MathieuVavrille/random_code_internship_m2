@@ -148,6 +148,7 @@ let input_output_inverse_sbox_proba =
 (* Computation of the Mix column function *)
     
 let add_zero_end =
+  (* equivalent to the concatenation of the bdd and N(T,F) but a little little faster *)
   let last = bdd_of T F in
   let computed = Hashtbl.create 101 in
   let rec aux m =
@@ -164,12 +165,15 @@ let add_zero_end =
 
 
 let gl_double_int x =
+  (* Double the byte as defined by the MC operations *)
   if x land 128 = 0 then (x lsl 1) land 255 else ((x lsl 1) land 255) lxor 27
 
 let gl_triple_int x =
+  (* Triple the byte as defined by the MC operations *)
   gl_double_int x lxor x
   
 let mix_column_int x0 x1 x2 x3 =
+  (* mix column on integers *)
   (gl_double_int x0) lxor (gl_triple_int x1) lxor x2 lxor x3,
   (gl_double_int x1) lxor (gl_triple_int x2) lxor x3 lxor x0,
   (gl_double_int x2) lxor (gl_triple_int x3) lxor x0 lxor x1,
@@ -206,16 +210,6 @@ let gl_double =
           Hashtbl.add computed (ref m) res;
           res in
   aux
-                      
-let gl_triple =
-  let computed = Hashtbl.create 101 in
-  let aux m =
-    try Hashtbl.find computed (ref m)
-    with Not_found ->
-      let res = bdd_xor (gl_double m) m in
-      Hashtbl.add computed (ref m) res;
-      res in
-  aux
 
 let mix_column_bdd =
   let computed = Hashtbl.create 101 in
@@ -223,6 +217,7 @@ let mix_column_bdd =
     try Hashtbl.find computed (ref x0,ref x1,ref x2,ref x3)
     with Not_found ->
       let double_array = Array.map (fun x -> gl_double x) [|x0; x1; x2; x3|] in
+      (* These two xor functions are used twice, so we compute less by computing them before *)
       let xor_01 = bdd_xor x0 x1 in
       let xor_23 = bdd_xor x2 x3 in
       let res =
@@ -233,29 +228,12 @@ let mix_column_bdd =
       Hashtbl.add computed (ref x0,ref x1,ref x2,ref x3) res;
       res in
   aux
-    
-(*let gl_nine powers =
-  bdd_xor powers.(0) powers.(3)
 
-let gl_eleven powers =
-  bdd_xor powers.(0) (bdd_xor powers.(1) powers.(3))
-
-let gl_thirteen powers =
-  bdd_xor powers.(0) (bdd_xor powers.(2) powers.(3))
-
-let gl_fourteen powers =
-  bdd_xor powers.(1) (bdd_xor powers.(2) powers.(3))*)
-
-  
-let gl_nine powers = powers.(0)
-
-let gl_eleven powers =
-  bdd_xor powers.(0) powers.(1)
-
-let gl_thirteen powers =
+(* For these functions, we assume that the multiplication by eight is already done *)
+let gl_13 powers =
   bdd_xor powers.(0) powers.(2)
                     
-let gl_fourteen powers =
+let gl_14 powers =
   bdd_xor powers.(1) powers.(2)
   
 let inverse_mix_column_bdd =
@@ -263,21 +241,23 @@ let inverse_mix_column_bdd =
   let aux y0 y1 y2 y3 =
     try Hashtbl.find computed (ref y0,ref y1,ref y2,ref y3)
     with Not_found ->
-      let powers_array = Array.make_matrix 4 4 F in
-      powers_array.(0).(0) <- y0;
-      powers_array.(1).(0) <- y1;
-      powers_array.(2).(0) <- y2;
-      powers_array.(3).(0) <- y3;
+      let powers = Array.make_matrix 4 4 F in
+      powers.(0).(0) <- y0;
+      powers.(1).(0) <- y1;
+      powers.(2).(0) <- y2;
+      powers.(3).(0) <- y3;
       for i=1 to 3 do
         for j=0 to 3 do
-          powers_array.(j).(i) <- gl_double (powers_array.(j).(i-1));
+          powers.(j).(i) <- gl_double (powers.(j).(i-1));
         done
       done;
-      let all_eight = bdd_xor powers_array.(0).(3) (bdd_xor powers_array.(1).(3) (bdd_xor powers_array.(2).(3) powers_array.(3).(3))) in
-      let res = bdd_xor all_eight (bdd_xor (gl_fourteen powers_array.(0)) (bdd_xor (gl_eleven powers_array.(1)) (bdd_xor (gl_thirteen powers_array.(2)) (gl_nine powers_array.(3))))),
-                bdd_xor all_eight (bdd_xor (gl_fourteen powers_array.(1)) (bdd_xor (gl_eleven powers_array.(2)) (bdd_xor (gl_thirteen powers_array.(3)) (gl_nine powers_array.(0))))),
-                bdd_xor all_eight (bdd_xor (gl_fourteen powers_array.(2)) (bdd_xor (gl_eleven powers_array.(3)) (bdd_xor (gl_thirteen powers_array.(0)) (gl_nine powers_array.(1))))),
-                bdd_xor all_eight (bdd_xor (gl_fourteen powers_array.(3)) (bdd_xor (gl_eleven powers_array.(0)) (bdd_xor (gl_thirteen powers_array.(1)) (gl_nine powers_array.(2))))) in
+      let all_eight = bdd_xor powers.(0).(3) (bdd_xor powers.(1).(3) (bdd_xor powers.(2).(3) powers.(3).(3))) in
+      let xor_02 = bdd_xor y0 y2 in
+      let xor_13 = bdd_xor y1 y3 in
+      let res = bdd_xor all_eight (bdd_xor xor_13 (bdd_xor (gl_14 powers.(0)) (bdd_xor powers.(1).(1) (gl_13 powers.(2))))),
+                bdd_xor all_eight (bdd_xor xor_02 (bdd_xor (gl_14 powers.(1)) (bdd_xor powers.(2).(1) (gl_13 powers.(3))))),
+                bdd_xor all_eight (bdd_xor xor_13 (bdd_xor (gl_14 powers.(2)) (bdd_xor powers.(3).(1) (gl_13 powers.(0))))),
+                bdd_xor all_eight (bdd_xor xor_02 (bdd_xor (gl_14 powers.(3)) (bdd_xor powers.(0).(1) (gl_13 powers.(1))))) in
       Hashtbl.add computed (ref y0,ref y1,ref y2,ref y3) res;
       res in
   aux                  
@@ -285,7 +265,9 @@ let inverse_mix_column_bdd =
 
 
   
-let generate_program r =
+let generate_program r key_size =
+  (* Generates the crypto program, currently for aes 128 *)
+  if key_size != 128 then failwith "bad key size";
   let underscores a b c = string_of_int a^"_"^(string_of_int b)^"_"^(string_of_int c) in
   let s = ref "" in
   for j=0 to 3 do

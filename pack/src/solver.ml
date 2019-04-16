@@ -92,9 +92,12 @@ let propagator_xor a b c store =
   let bddb,wb = Store.find b store in
   let bddc,wc = Store.find c store in
   let deptha, depthb, depthc = depth bdda, depth bddb, depth bddc in
-  let res_a = improved_consistency bdda (bdd_xor (give_depth deptha bddb) (give_depth deptha bddc)) wa random_heuristic_improved_consistency in
-  let res_b = improved_consistency bddb (bdd_xor (give_depth depthb bdda) (give_depth depthb bddc)) wb random_heuristic_improved_consistency in
-  let res_c = improved_consistency bddc (bdd_xor (give_depth depthc bdda) (give_depth depthc bddb)) wc random_heuristic_improved_consistency in
+  let cons_a = bdd_xor (give_depth deptha bddb) (give_depth deptha bddc) in
+  let res_a = if subset bdda cons_a then bdda else improved_consistency bdda cons_a wa random_heuristic_improved_consistency in
+  let cons_b = bdd_xor (give_depth depthb bdda) (give_depth depthb bddc) in
+  let res_b = if subset bddb cons_b then bddb else improved_consistency bddb cons_b wb random_heuristic_improved_consistency in
+  let cons_c = bdd_xor (give_depth depthc bdda) (give_depth depthc bddb) in
+  let res_c = if subset bddc cons_c then bddc else improved_consistency bddc cons_c wc random_heuristic_improved_consistency in
   time_xor := !time_xor +. Sys.time () -. t;
   Store.add a (res_a,wa) (Store.add b (res_b,wb) (Store.add c (res_c,wc) store)), get_modified [a,bdda,res_a;b,bddb,res_b;c,bddc,res_c]
 
@@ -102,7 +105,7 @@ let time_mc = ref 0.
 let time_fun_mc = ref 0.
 let time_fun_mc_normal = ref 0.
 let time_fun_mc_inverse = ref 0.
-let time_mc_consistency = ref 0. 
+let time_mc_consistency = ref 0.
 let propagator_mc a b c d e f g h store =
   let t = Sys.time() in
   let bdda,wa = Store.find a store in

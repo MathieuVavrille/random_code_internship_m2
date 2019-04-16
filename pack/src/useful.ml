@@ -130,11 +130,13 @@ let bitvectset_of_bdd =
           res
   in aux
 
+(* Conversion functions *)
 let int_of_bitvect = List.fold_left (fun acc elt -> 2*acc+(if elt then 1 else 0)) 0
 
 let intlist_of_bitvectset bvset = Bvset.fold (fun elt acc -> int_of_bitvect elt::acc) bvset []
 
 let int_of_bdd m =
+  (* Returns the integer corresponding to the BDD, raises an error if it is not possible (not a singleton BDD) *)
   let rec aux m acc = match m with
     | T -> acc
     | F -> failwith "int_of_bdd: Can't give int from empty set"
@@ -144,6 +146,7 @@ let int_of_bdd m =
   in aux m 0
 
 let rec pow a n =
+  (* naive power *)
   match n with
   | 0 -> 1
   | n -> a*(pow a (n-1))
@@ -165,6 +168,7 @@ let random_set max =
 (* Functions to cut BDDs, extend them, or concatenate them *)
             
 let possible_outputs m bdd_fun =
+  (* Return the set of BDDs that are the got by following a path in the bdd_fun that is also in m *)
   let rec aux m current_bdd_fun acc = match m,current_bdd_fun with
     | F,_ | _, F -> acc
     | T, _ -> Bddset.add current_bdd_fun acc
@@ -173,13 +177,15 @@ let possible_outputs m bdd_fun =
   in
   aux m bdd_fun Bddset.empty
   
-let rec complete_bdd depth = match depth with
+let rec complete_bdd depth =
+  (* Returns the complete BDD of given depth *)
+  match depth with
   | 0 -> T
   | _ -> let res = complete_bdd (depth-1) in
          bdd_of res res
 
-(* Return the BDD where we keep only the first bits *)
 let cutted_bdd =
+  (* Return the BDD where we keep only the first bits *)
   let computed = Hashtbl.create 101 in
   let rec aux wanted_depth m =
     if depth m <= wanted_depth then m else begin
@@ -194,8 +200,8 @@ let cutted_bdd =
       res end in
   aux
 
-(* Return the bdd representing the concatenation of the two bdds *)
 let concatenate_bdd = 
+  (* Return the bdd representing the concatenation of the two bdds *)
   let computed = Hashtbl.create 101 in
   let rec aux m m' =
     try Hashtbl.find computed (ref m, ref m')
@@ -209,10 +215,12 @@ let concatenate_bdd =
   aux
 
 let complete_end depth m =
+  (* Add the complete BDD at the end of the chosen BDD *)
   let full_bdd = complete_bdd depth in
   concatenate_bdd m full_bdd
 
 let give_depth wanted_depth m =
+  (* either reduce or increase the depth of the given BDD. Decreasing will remove the lower part, increasing will add the complete BDD at the end *)
   let current_depth = depth m in
   let res = 
   if wanted_depth > current_depth then
@@ -229,6 +237,7 @@ let give_depth wanted_depth m =
   
 let dot_file m filename =
   (* Outputs a string that can be processed with graphviz dot *)
+  (* Warning, for big graphs the computation of graphviz can be long *)
   let s = ref "graph g {\n" in
   let counter = let x = ref (-1) in fun () -> incr x; !x in
   let indices = Hashtbl.create 101 in
@@ -262,6 +271,8 @@ let dot_file m filename =
   close_out oc
 
 let save_to_file m filename =
+  (* Saves the bdd to the file given by filename. The format is special, it should be used with get_from_file *)
+  (* The BDD 0 is T, 1 is F, and 2 is the main BDD *)
   let counter = let x = ref 1 in fun () -> incr x; !x in
   let index = Hashtbl.create 101 in
   Hashtbl.add index (ref T) 0;
@@ -287,6 +298,7 @@ let save_to_file m filename =
   close_out oc
   
 let get_from_file filename =
+  (* Takes as input the name of the file to open, open it and return the corresponding bdd *)
   let ic = open_in filename in
   let text = input_line ic in
   close_in ic;
@@ -300,8 +312,10 @@ let get_from_file filename =
                                      | _ -> failwith "error on the file"
                                                   end ) (Strmap.add "0" T (Strmap.singleton "1" F)) (String.split_on_char ';' text) in
   Strmap.find "2" full_map
+
+
   
-  (* Some other useful functions *)
+(* Some other useful functions *)
 
 let rec list_compare f l1 l2 = match l1, l2 with
   | [], [] -> 0
@@ -312,10 +326,11 @@ let rec list_compare f l1 l2 = match l1, l2 with
                   | n -> n
 
                        
-let inter_of_union = 
+let inter_of_union =
+  (* Computes the intersection of the first parameter with the union of the set (second parameter) *)
   let computed = Hashtbl.create 101 in
   let split_zero_one bdds =
-    (* Take a bddset as input and return two bdds: one with all the 0-subtrees, and the other with all the 1-subtrees *) 
+    (* Take a bddset as input and return two bddsets: one with all the 0-subtrees, and the other with all the 1-subtrees *) 
     Bddset.fold (fun elt (zeroacc, oneacc) ->
         match elt with
         | T -> failwith "split_zero_one_inter_with_union: not the same size"
@@ -343,15 +358,16 @@ let inter_of_union =
   aux
           
 
-    (************************************)
-    (* Useful constants or special BDDs *)
+(************************************)
+(* Useful constants or special BDDs *)
 
 let complete8 = complete_bdd 8
-
+              
 let complete16 = complete_bdd 16
-
+               
 let zero_bdd8 = bdd_of_int 0 8 8
               
 let zero_bdd16 = bdd_of_int 0 16 16
-
+               
 let not_zero_bdd8 = diff (complete_bdd 8) (bdd_of_int 0 8 8)
+                      
