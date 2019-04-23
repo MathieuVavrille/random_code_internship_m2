@@ -24,7 +24,7 @@ main:
 		     let active_sbox_list = List.fold_left (fun acc (x,y) -> if Varset.mem x !sbox_inactive then acc else (x,y)::acc)
 							   [] !all_sbox in
 		     let cstr_bound = ref (-7 * List.length active_sbox_list) in
-		     List.fold_left (fun acc (x,y) -> if Varset.mem x !sbox_inactive then Cstrset.add (Iscst(y,0)) acc else acc) (Cstrset.add (ActiveSB(active_sbox_list, cstr_bound)) cstrset) !all_sbox, List.rev (List.fold_left (fun acc (a,b) -> a::b::acc) [] !all_sbox), cstr_bound }
+		     List.fold_left (fun acc (x,y) -> if Varset.mem x !sbox_inactive then Cstrset.add (Iscst(y,0)) acc else acc) (Cstrset.add (ActiveSB(active_sbox_list, cstr_bound)) cstrset) !all_sbox, List.fold_left (fun acc (a,b) -> if Varset.mem a !sbox_inactive then acc else a::b::acc) [] !all_sbox, cstr_bound }
 
 cstr:
   | END            { Cstrset.empty }

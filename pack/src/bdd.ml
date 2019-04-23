@@ -1,5 +1,5 @@
 module B = Big_int_Z
-
+                
 (* BDDs are trees and nodes have a 0-edge (first of the couple) and a 1-edge (second element of the couple) *)
 type bdd = T | F | N of bdd * bdd
                       

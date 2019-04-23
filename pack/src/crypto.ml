@@ -94,14 +94,22 @@ let input_output_inverse_sbox =
             res
 
                               
-let probaS a b =
+let probaS =
   (* Logarithm of the probability that inputing a in the differential s-box gives b *)
-  let count = ref (-16) in
-  for i=0 to 255 do
-    if sbox.(i) lxor sbox.(i lxor a) = b then incr count
-  done;
-    !count/2
-
+  let computed = Hashtbl.create 101 in
+  let aux a b =
+    try Hashtbl.find computed (a,b)
+    with Not_found ->
+          let res = 
+            let count = ref (-16) in
+            for i=0 to 255 do
+              if sbox.(i) lxor sbox.(i lxor a) = b then incr count
+            done;
+            !count/2 in
+          Hashtbl.add computed (a,b) res;
+          res in
+  aux
+            
 let input_output_sbox_proba =
   (* return the bdd representing the S-box where the probability is 2^-6 *)
   try get_from_file "src/saved_bdd/input_output_sbox_proba.bdd"
