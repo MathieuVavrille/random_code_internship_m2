@@ -23,6 +23,7 @@ let _ = print_endline ("Time in initialization: "^(string_of_float (!preprocessi
 let _ = print_endline ("Time in propagation fun: "^(string_of_float (!time_full_propag)))
 let _ = print_endline ("Time in propagation to propagate: "^(string_of_float (!time_all_propag)))
 let _ = print_endline (" |Time in propagator_mc: "^(string_of_float (!time_mc)))
+let _ = print_endline (" |Time in propagator_mc improved: "^(string_of_float (!time_mc_cons_single)))
 let _ = print_endline (" | |Time in function MC: "^(string_of_float (!time_fun_mc)))
 let _ = print_endline (" | | |Time in function MC normal: "^(string_of_float (!time_fun_mc_normal)))
 let _ = print_endline (" | | |Time in function MC inverse: "^(string_of_float (!time_fun_mc_inverse)))

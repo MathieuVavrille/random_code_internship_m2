@@ -199,7 +199,7 @@ let single_zero_mc =
                    | -1 -> acc
                    | _ -> let x0,x1,x2,x3 = (if i = 0 then n else 0), (if i = 1 then n else 0), (if i = 2 then n else 0), (if i = 3 then n else 0) in
                           let y0,y1,y2,y3 = mix_column_int x0 x1 x2 x3 in
-                          aux (n-1) (union acc (concatenate_bdd (bdd_of_int n 8 8) (concatenate_bdd (bdd_of_int y0 8 8) (concatenate_bdd (bdd_of_int y1 8 8) (concatenate_bdd (bdd_of_int y2 8 8) (bdd_of_int y3 8 8)))))) in
+                          aux (n-1) (union acc (concatenate_bdd (bdd_of_int y0 8 8) (concatenate_bdd (bdd_of_int n 8 8) (concatenate_bdd (bdd_of_int y1 8 8) (concatenate_bdd (bdd_of_int y2 8 8) (bdd_of_int y3 8 8)))))) in
                  let computed = aux 255 F in
                  save_to_file computed ("src/saved_bdd/single_zero_input_"^(string_of_int i)^".bdd");
                  computed
